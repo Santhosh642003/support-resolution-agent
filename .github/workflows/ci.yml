@@ -1,0 +1,77 @@
+name: ci
+
+# No API keys, no secrets. Tests use the FakeAdapter and make no network calls.
+# The only network use is the setup step that fetches the pinned embedding model files,
+# which are cached and SHA-256 verified; a mismatch fails the job.
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      LLM_PROVIDER: fake
+      DATABASE_URL: postgresql+psycopg://support:support@127.0.0.1:5432/support
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.7-pg17
+        env:
+          POSTGRES_USER: support
+          POSTGRES_PASSWORD: support
+          POSTGRES_DB: support
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U support -d support"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Secret scan (tracked files)
+        working-directory: .
+        run: |
+          if git grep -nE -e '-----BEGIN [A-Z ]*PRIVATE KEY-----'; then
+            echo "private key material found in tracked files"; exit 1
+          fi
+          if git ls-files | grep -E '\.(key|pem)$|(^|/)id_(rsa|ed25519)|(^|/)\.env$'; then
+            echo "secret-looking file tracked"; exit 1
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: python -m pip install uv==0.11.19
+
+      - name: Install dependencies (locked)
+        run: uv sync --frozen
+
+      - name: Restore embedding model cache
+        uses: actions/cache@v4
+        with:
+          path: backend/models
+          # The key changes whenever the pinned revision or file hashes change.
+          key: bge-small-en-v1.5-${{ hashFiles('backend/app/retrieval/embedding_model.py') }}
+
+      - name: Fetch embedding model (SHA-256 verified; fails the job on mismatch)
+        run: uv run python -m app.retrieval.fetch_model
+
+      - name: Lint
+        run: uv run ruff check . && uv run ruff format --check .
+
+      - name: Type check
+        run: uv run mypy
+
+      - name: Tests (no network, no API key)
+        run: uv run pytest -q

@@ -76,11 +76,13 @@ All Docker images must build and run on `linux/arm64` (OCI Ampere A1). Flag any 
 - **Fail closed on explanation mismatch:** the customer sees the rules engine's Decision, never the model's numbers; disagreement escalates to handoff.
 - FakeAdapter fixtures are keyed by scenario ID + step index; the prompt hash is a staleness warning only.
 - Record arm64 availability and evidence in `docs/SPEC.md` section 9 when adding any heavy dependency. No arm64 CI job; real verification is a native build on OCI at M4.
-- **Stage named paths, never `git add -A`** (a private key was once swept into a commit that way; see `docs/FAILURE_ANALYSIS.md` F-004). Scan the history for secrets and read the result before every push.
+- **Stage named paths, never `git add -A`** (a private key was once swept into a commit that way; see `docs/FAILURE_ANALYSIS.md` F-004). The pre-commit hook is the second layer behind `.gitignore`.
 - Log real defects in `docs/FAILURE_ANALYSIS.md` with the test that exposed them.
 - Small commits; tests alongside the code they cover.
 - Never commit secrets. `.env` is git-ignored; provide `.env.example` with placeholder values only.
 - **Ask before adding a dependency or expanding scope.**
 - Typed schemas at every API boundary; business rules are pure functions with unit tests.
 - Commit messages and pull request descriptions contain **no attribution trailers of any kind**. Never add `Co-Authored-By`, `Claude-Session`, or "Generated with Claude Code" lines. Subject and body only.
-- Do not push unless the project owner says so.
+- **Never run `git push`.** Commits only. The project owner pushes manually after reviewing the diff. This is permanent; an earlier one-off instruction to push has been withdrawn.
+- A pre-commit hook (`scripts/git-hooks/pre-commit`, installed at `.git/hooks/pre-commit`) refuses staged `*.key`, `*.pem`, `id_rsa*`, `id_ed25519*`, `.env` and `.env.*` (except `*.example`/`*.sample`), and any file whose first line contains `PRIVATE KEY`. Hooks live outside tracked content: in a new clone run `cp scripts/git-hooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit`. Never bypass it with `--no-verify`.
+- Project code must not import `httpx2` (a transitive dependency of `huggingface-hub`); a test enforces this. Our HTTP client is `httpx`.

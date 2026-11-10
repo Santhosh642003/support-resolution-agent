@@ -267,9 +267,18 @@ Checked 2026-11-10 against PyPI JSON metadata (wheel filenames) and the Hugging 
 | fastembed | 0.9.1 | pure-Python wheel, 150 KB; requires onnxruntime, tokenizers, numpy, pillow, loguru, mmh3, py-rust-stemmers, requests, huggingface-hub, tqdm | no torch; mmh3, py-rust-stemmers, pillow not yet checked for aarch64 |
 | bge-small-en-v1.5 ONNX | HF `onnx/model.onnx` | 133 MB fp32 in the official repo | architecture-independent file |
 
-Embedding runtime decision: ONNX Runtime + tokenizers + numpy (plus tokenizers' transitive huggingface-hub tree, about a dozen small packages) is well under 100 MB of wheels plus the 133 MB model, versus several hundred MB to over a gigabyte for torch. The earlier "about 40 MB" figure ignored the transitive packages; see the tokenizers row. A hand-written WordPiece tokenizer would remove that tree but is not adopted (PM approved `tokenizers`). Approved by the PM; the embedder sits behind an interface local to `app/retrieval/embedder.py`.
+Embedding runtime decision: ONNX Runtime + tokenizers + numpy (plus tokenizers' transitive huggingface-hub tree, about a dozen small packages) is well under 100 MB of wheels plus the 133 MB model, versus several hundred MB to over a gigabyte for torch. The earlier "about 40 MB" figure ignored the transitive packages; see the tokenizers row. A hand-written WordPiece tokenizer would remove that tree and is **rejected**; see section 9.1. Approved by the PM; the embedder sits behind an interface local to `app/retrieval/embedder.py`.
 
 The backend image built locally on amd64 at 317 MB. The Dockerfile contains nothing architecture-specific, but it has not been built on arm64.
+
+### 9.1 Decision: keep `tokenizers`; do not hand-write a tokenizer (PM, 2026-11-10)
+
+- **Rejected alternative:** a hand-written WordPiece tokenizer (roughly 60 lines) to drop `huggingface-hub` and its tree.
+- **Why rejected (correctness, not effort):** an implementation that is 99 percent correct yields subtly wrong embeddings on exactly the unicode and adversarial inputs this project cares about (accent stripping, CJK splitting, control characters, zero-width joiners, homoglyphs). Tokenizer bugs are input-specific, so a 34-string parity fixture would not reliably catch them. It trades a measured, bounded dependency cost for an unmeasured correctness risk in retrieval.
+- **What it would have saved:** the transitive tree (about a dozen small packages, tens of MB). Not a binding constraint: the backend image was 317 MB before the embedder, against an OCI instance with at least 6 GB of memory. The same reasoning keeps int8 quantization deferred.
+- **Revisit only on a measured problem**, such as the OCI instance actually running short of disk.
+- **`httpx2`:** a transitive dependency is acceptable. Project code must not import `httpx2` or `httpcore2`; `backend/tests/unit/test_import_boundaries.py` fails if any module under `app/` does, so the boundary is enforced by CI rather than remembered.
+- **Image size with the embedder:** the Dockerfile now fetches and verifies the pinned model during the build (fails on a SHA-256 mismatch). **Final size not yet measured**: the build could not complete because the development machine's C: drive was full (Docker Desktop could not start). Baseline before the embedder: 317 MB. To be recorded here once measured.
 
 ## 10. Response path and explanation correctness
 
@@ -366,7 +375,13 @@ Pinned model: `BAAI/bge-small-en-v1.5`, revision `5c38ec7c405ec4b44b94cc5a9bb96e
 
 **Implementation details that must match:** CLS-token pooling, L2 normalisation, 512-token truncation, lowercase/accent handling from `tokenizer.json`, no query-instruction prefix.
 
-**Model files and CI.** `model.onnx` is 133 MB, over GitHub's 100 MB per-file limit, so it is not committed. `python -m app.retrieval.fetch_model` downloads the pinned files and verifies SHA-256 (the `model.onnx` hash is the Hugging Face LFS object id; `tokenizer.json`'s hash was computed on first download, i.e. trust on first use). The test never touches the network; it reads files placed on disk. CI will run the fetch as a separate setup step with `actions/cache` keyed on the pinned revision, then run the tests with no network. If the files are absent the parity test FAILS loudly, never skips. This reads "no network" as "no network during tests"; flagged in the task report.
+**Integrity controls and their limits (stated plainly).** The primary integrity control is the **pinned Hugging Face revision** (a commit hash). The recorded SHA-256 of each file is a **secondary check**. For `model.onnx` the hash is Hugging Face's own LFS object id, recorded independently of our download. For `tokenizer.json` the hash was **computed from our first download (trust on first use)**, so it detects later corruption or substitution but **cannot detect a compromised first download**; it is not independent verification. We cannot fully close this gap without a separately published hash for that file. CI and the Docker build fail on any mismatch.
+
+**Model files and CI.** `model.onnx` is 133 MB, over GitHub's 100 MB per-file limit, so it is not committed. `python -m app.retrieval.fetch_model` downloads the pinned files and verifies SHA-256 (the `model.onnx` hash is the Hugging Face LFS object id; `tokenizer.json`'s hash was computed on first download, i.e. trust on first use). The test never touches the network; it reads files placed on disk. CI runs the fetch as a separate setup step with `actions/cache` (the key is a hash of `app/retrieval/embedding_model.py`, which holds the pinned revision and file hashes), then runs the tests with no network. **A hash mismatch fails the job and stops it, never a warning** (`fetch_model` exits non-zero; the step aborts the job). If the files are absent the parity test FAILS loudly, never skips. "No network in the test" means the test makes no network call; CI itself may use the network for this one setup step (PM-confirmed).
+
+**Rejected alternatives for the model file:** Git LFS (the free quota is small and it makes the repository heavier to clone, which matters for a portfolio repo people may clone); the int8-quantized model (changing the model to fit a CI constraint lets infrastructure drive a retrieval-quality decision, the wrong order).
+
+**CI workflow:** `.github/workflows/ci.yml` (written 2026-11-10; it has not yet run on GitHub). It runs a secret scan of tracked files, `uv sync --frozen`, the model fetch, ruff, mypy and pytest against a pgvector service container, with no API keys.
 
 ## 15. Python version
 

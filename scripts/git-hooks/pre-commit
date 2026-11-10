@@ -1,0 +1,39 @@
+#!/bin/sh
+# Pre-commit guard: refuse to commit secrets.
+#
+# Blocks any staged path whose basename matches *.key, *.pem, id_rsa*, id_ed25519*, .env
+# (or .env.* other than *.example / *.sample), and any staged file whose FIRST LINE
+# contains "PRIVATE KEY".
+#
+# Git hooks live in .git/hooks, outside the tracked content. This copy is tracked at
+# scripts/git-hooks/pre-commit; install it in any clone with:
+#   cp scripts/git-hooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+
+flag="${TMPDIR:-/tmp}/.precommit_blocked.$$"
+rm -f "$flag"
+
+git diff --cached --name-only --diff-filter=ACMR -z | while IFS= read -r -d '' path; do
+    base=$(basename "$path")
+    case "$base" in
+        *.example|*.sample) ;;
+        *.key|*.pem|id_rsa*|id_ed25519*|.env|.env.*)
+            echo "pre-commit: BLOCKED secret-looking path: $path" >&2
+            : > "$flag"
+            continue
+            ;;
+    esac
+    first=$(git show ":$path" 2>/dev/null | head -c 300 | head -n 1)
+    case "$first" in
+        *"PRIVATE KEY"*)
+            echo "pre-commit: BLOCKED file whose first line contains PRIVATE KEY: $path" >&2
+            : > "$flag"
+            ;;
+    esac
+done
+
+if [ -e "$flag" ]; then
+    rm -f "$flag"
+    echo "pre-commit: commit refused. Unstage with 'git restore --staged <path>' and add the pattern to .gitignore." >&2
+    exit 1
+fi
+exit 0
