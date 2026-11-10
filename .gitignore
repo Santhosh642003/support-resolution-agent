@@ -229,3 +229,6 @@ __marimo__/
 ssh-key-*
 id_rsa*
 id_ed25519*
+
+# Downloaded embedding model files (fetched by app.retrieval.fetch_model)
+backend/models/

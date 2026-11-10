@@ -251,7 +251,9 @@ Checked 2026-11-10 against PyPI JSON metadata (wheel filenames) and the Hugging 
 |---|---|---|---|
 | pydantic-core | 2.50.4 | `manylinux2014_aarch64` cp311/cp312 wheel, 2.1 MB | via FastAPI/pydantic |
 | psycopg-binary | 3.3.8 | `manylinux_2_28_aarch64` cp311/cp312 wheel, 6.9 MB | in use since task 3 |
-| tokenizers | 0.23.3 | `cp310-abi3-manylinux_2_17_aarch64` wheel, 3.5 MB | |
+| tokenizers | 0.23.3 | `cp310-abi3-manylinux_2_17_aarch64` wheel, 3.5 MB | **declares a hard dependency on `huggingface-hub`** (found when it was installed; earlier estimates counted only the 3.5 MB wheel) |
+| huggingface-hub (via tokenizers) | 2.4.0 | pure Python; requires click, filelock, fsspec, hf-xet, httpx2, packaging, pyyaml, tqdm, typing-extensions | transitive. `httpx2` is therefore in the lockfile even though project code uses `httpx`; our code does not import it |
+| hf-xet (via huggingface-hub) | 1.8.0 | `cp38-abi3-manylinux_2_28_aarch64` wheel, 4.1 MB | native; marker includes `aarch64` |
 | onnxruntime | 1.31.1 | cp311/cp312 `manylinux_2_28_aarch64` wheel, 21.4 MB | |
 | numpy | 2.5.4 | cp312 `manylinux_2_27_aarch64` wheel, 15.7 MB | Python is 3.12 everywhere (section 15), which resolves the earlier cp311 gap |
 | pgvector/pgvector image | `0.8.7-pg17` (digest `sha256:7d0a4146...ccb8`) | `docker buildx imagetools inspect` and the Docker Hub tag API both list `linux/amd64` and `linux/arm64`; the same holds for the 0.7.4 to 0.8.7 pg17 tags | multi-arch confirmed by manifest. Run locally on amd64 only: extension loaded, `<->` distance and tsvector queries worked |
@@ -265,7 +267,7 @@ Checked 2026-11-10 against PyPI JSON metadata (wheel filenames) and the Hugging 
 | fastembed | 0.9.1 | pure-Python wheel, 150 KB; requires onnxruntime, tokenizers, numpy, pillow, loguru, mmh3, py-rust-stemmers, requests, huggingface-hub, tqdm | no torch; mmh3, py-rust-stemmers, pillow not yet checked for aarch64 |
 | bge-small-en-v1.5 ONNX | HF `onnx/model.onnx` | 133 MB fp32 in the official repo | architecture-independent file |
 
-Embedding runtime decision: ONNX Runtime + tokenizers + numpy is about 40 MB of wheels plus the 133 MB model, versus several hundred MB to over a gigabyte for torch. Approved by the PM; the embedder sits behind an interface local to `app/retrieval/embedder.py`.
+Embedding runtime decision: ONNX Runtime + tokenizers + numpy (plus tokenizers' transitive huggingface-hub tree, about a dozen small packages) is well under 100 MB of wheels plus the 133 MB model, versus several hundred MB to over a gigabyte for torch. The earlier "about 40 MB" figure ignored the transitive packages; see the tokenizers row. A hand-written WordPiece tokenizer would remove that tree but is not adopted (PM approved `tokenizers`). Approved by the PM; the embedder sits behind an interface local to `app/retrieval/embedder.py`.
 
 The backend image built locally on amd64 at 317 MB. The Dockerfile contains nothing architecture-specific, but it has not been built on arm64.
 
@@ -359,6 +361,12 @@ Blocking gate before retrieval is built on the ONNX embedder:
 3. The committed parity test loads the fixture and asserts cosine similarity of at least 0.999 against our ONNX implementation for every string. It runs in CI with no torch and no network (the ONNX model file is fetched by a setup script outside CI or cached; if the file is absent the test fails loudly rather than skipping).
 
 Pinned model: `BAAI/bge-small-en-v1.5`, revision `5c38ec7c405ec4b44b94cc5a9bb96e735b38267a`, verified via the Hugging Face API on 2026-11-10. Dimension 384.
+
+**Status (2026-11-10): gate passed.** Reference vectors: 34 strings (9 policy chunks from section 13, 4 customer messages, 6 adversarial including a 700-repeat string far past 512 tokens, 9 unicode cases, 5 edge cases including empty and whitespace-only strings), generated with sentence-transformers 6.2.0, transformers 5.22.2, torch 2.15.0 on Python 3.12, recorded in the fixture's `meta`. Result: minimum cosine 0.9999999, median 1.0000, against a threshold of 0.999. Test: `backend/tests/unit/test_embedding_parity.py` (no torch, no network). It also checks unit length and that batching/padding does not change a vector. Generator: `backend/scripts/generate_embedding_parity_fixture.py` (run in a throwaway environment, not in project dependencies).
+
+**Implementation details that must match:** CLS-token pooling, L2 normalisation, 512-token truncation, lowercase/accent handling from `tokenizer.json`, no query-instruction prefix.
+
+**Model files and CI.** `model.onnx` is 133 MB, over GitHub's 100 MB per-file limit, so it is not committed. `python -m app.retrieval.fetch_model` downloads the pinned files and verifies SHA-256 (the `model.onnx` hash is the Hugging Face LFS object id; `tokenizer.json`'s hash was computed on first download, i.e. trust on first use). The test never touches the network; it reads files placed on disk. CI will run the fetch as a separate setup step with `actions/cache` keyed on the pinned revision, then run the tests with no network. If the files are absent the parity test FAILS loudly, never skips. This reads "no network" as "no network during tests"; flagged in the task report.
 
 ## 15. Python version
 
