@@ -58,13 +58,17 @@ No paid API access. This is a hard constraint, and the architecture must keep it
 All unit tests, all CI runs, and all business-rule tests pass with zero network calls using `FakeAdapter`. CI must never require an API key. Tests that need the network are marked and excluded from CI.
 
 ### Local embeddings
-Local CPU embeddings of `bge-small-en-v1.5` (384-dim); runtime (sentence-transformers vs ONNX Runtime) pending PM decision. No embedding API. Pin model name and revision; store the embedding model identifier alongside every stored vector so a model change is detectable, not silent; record the resulting pgvector dimension.
+Local CPU embeddings with **ONNX Runtime + tokenizers + numpy** (no torch in project dependencies, CLS pooling and L2 normalisation hand-implemented). Model `BAAI/bge-small-en-v1.5`, revision `5c38ec7c405ec4b44b94cc5a9bb96e735b38267a` (verified 2026-11-10), 384 dimensions. No embedding API. A parity test against committed sentence-transformers reference vectors (cosine >= 0.999, runs with no torch and no network) is a blocking gate for retrieval work. Pin model name and revision; store the embedding model identifier alongside every stored vector so a model change is detectable, not silent; record the resulting pgvector dimension.
 
 ### arm64 build constraint
 All Docker images must build and run on `linux/arm64` (OCI Ampere A1). Flag any dependency that is x86-only or lacks Arm wheels as soon as it is noticed. Assume a small instance; keep memory modest; no GPU.
 
 ## Conventions
 
+- **Python 3.12 everywhere** (local via uv, Docker, CI). Do not split versions.
+- **Prompt Guard is detection only.** It must never be the control that blocks an action, and a negative result never relaxes a check. Auth, deterministic rules, and the single-use confirmation token are the only defenses.
+- **Paid-amount invariant:** total refunds per order can never exceed the amount actually paid, enforced in code and at the database, independent of policy text.
+- Policy version comes from the purchase date; the refund window is measured from delivery or presumed-lost date. Never conflate the two anchors.
 - **LLM call budget: at most 2 calls per case** (extraction, explanation). A third needs PM approval.
 - **Fail closed on explanation mismatch:** the customer sees the rules engine's Decision, never the model's numbers; disagreement escalates to handoff.
 - FakeAdapter fixtures are keyed by scenario ID + step index; the prompt hash is a staleness warning only.

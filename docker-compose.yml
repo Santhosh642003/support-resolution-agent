@@ -1,0 +1,35 @@
+# SIMULATED-DATA project. Local development stack.
+# Images are multi-arch (amd64 + arm64); nothing here is architecture-specific.
+services:
+  db:
+    # Pinned to a pgvector release on PostgreSQL 17. Evidence of arm64 support: docs/SPEC.md section 9.
+    image: pgvector/pgvector:0.8.7-pg17
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-support}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-support}
+      POSTGRES_DB: ${POSTGRES_DB:-support}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-support}:${POSTGRES_PASSWORD:-support}@db:5432/${POSTGRES_DB:-support}
+      LLM_PROVIDER: ${LLM_PROVIDER:-fake}
+      LLM_MODEL: ${LLM_MODEL:-}
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

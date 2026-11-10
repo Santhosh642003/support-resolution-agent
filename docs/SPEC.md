@@ -103,6 +103,28 @@ The model is invoked only in `INTENT_CLASSIFIED` (classification/extraction) and
 
 ## 4. Model provider layer
 
+### 4.0 Free-tier model list (captured 2026-11-10, may change)
+
+Captured from a live Groq key on 2026-11-10; the list **will change** and the adapter layer is what absorbs that (model IDs live only in env and adapter defaults):
+- `openai/gpt-oss-120b`: primary chat model
+- `openai/gpt-oss-20b`: fallback
+- `qwen/qwen3.8-27b`: second fallback
+- `meta-llama/llama-prompt-guard-2-86m` and `-22m`: prompt-injection classifiers
+- No Llama 3.3 70B and no embedding model on the free tier.
+
+gpt-oss models are reasoning models and may be less deterministic at temperature 0 than a standard instruct model. The smoke test therefore measures this directly: same prompt, 20 runs, temperature 0, report how many outputs are byte-identical. If determinism is poor, the cache still works as a replay store keyed by prompt, but reports must state that cached results are a **snapshot of one sampling, not a reproducible computation**.
+
+Smoke-test target is gpt-oss-120b, running the checklist from the first report plus the determinism item.
+
+### 4.0.1 Prompt Guard (detection only)
+
+Llama Prompt Guard 2 is defense in depth and a **measurement layer**. It is never the control that prevents an unauthorized action. Server-side authorization, deterministic rules, and the single-use confirmation token remain the only things between hostile input and a write.
+- It runs over retrieved policy chunks and customer-supplied text before they reach the main model.
+- A positive detection annotates the trace and the handoff evidence and may raise a case to human review. It must not be the sole reason an action is blocked. A negative detection never relaxes any check.
+- It is an extra network call outside the 2-call budget. It has its own budget, and its cost and latency are reported separately. If free-tier quota becomes the binding constraint, it is the first thing to drop.
+- M3 reports its detection rate on adversarial families 2 and 3 as a separate metric, and separately demonstrates that the system holds on those same cases **with Prompt Guard disabled**. The disabled-run result is the one that matters.
+- It sits behind the same provider interface and adapter layer (a `classify_injection` method), with a Fake implementation for CI.
+
 ### 4.1 Interface (`app/llm/base.py`)
 ```
 class LLMProvider(Protocol):
@@ -137,7 +159,7 @@ LLMClient: cache lookup -> [hit: return] -> rate limiter -> adapter -> retry/bac
 Order matters: cache sits **outside** the limiter, so hits consume no quota. The `FakeAdapter` sits at the adapter position, so the cache, limiter, and validation logic are all exercised in CI without network.
 
 ### 4.6 Embeddings
-`app/retrieval/embedder.py` wraps a local CPU embedder for bge-small-en-v1.5 (384-dim) with pinned name and revision hash (HF commit `5c38ec7c405ec4b44b94cc5a9bb96e735b38267a` as seen 2026-11-10; re-verify when pinning), loaded once per process. Runtime (sentence-transformers/torch vs ONNX Runtime) is pending PM decision; see section 9. Not part of the LLM provider interface and not a vendor LLM API. Documents are re-embedded only when `content_hash` or model id changes.
+`app/retrieval/embedder.py` wraps a local CPU embedder for bge-small-en-v1.5 (384-dim) with pinned name and revision hash (HF commit `5c38ec7c405ec4b44b94cc5a9bb96e735b38267a` as seen 2026-11-10; re-verify when pinning), loaded once per process. Runtime is **ONNX Runtime + tokenizers + numpy** (PM-approved 2026-11-10), with CLS pooling and L2 normalisation implemented by hand; no torch in project dependencies. The pinned revision hash was verified against the Hugging Face API on 2026-11-10. int8 quantization is deferred. Gate: the parity test in section 14 must pass before retrieval work builds on this embedder. Not part of the LLM provider interface and not a vendor LLM API. Documents are re-embedded only when `content_hash` or model id changes.
 
 ## 5. Cross-cutting design notes
 
@@ -221,13 +243,18 @@ Checked 2026-11-10 against PyPI JSON metadata (wheel filenames) and the Hugging 
 | psycopg-binary | 3.3.8 | `manylinux_2_28_aarch64` cp311/cp312 wheel, 6.9 MB | not yet added (task 3) |
 | tokenizers | 0.23.3 | `cp310-abi3-manylinux_2_17_aarch64` wheel, 3.5 MB | |
 | onnxruntime | 1.31.1 | cp311/cp312 `manylinux_2_28_aarch64` wheel, 21.4 MB | |
-| numpy | 2.5.4 | cp312 `manylinux_2_27_aarch64` wheel, 15.7 MB; no cp311 aarch64 wheel matched my filter for this release | use Python 3.12 in Docker or verify the resolved version |
+| numpy | 2.5.4 | cp312 `manylinux_2_27_aarch64` wheel, 15.7 MB | Python is 3.12 everywhere (section 15), which resolves the earlier cp311 gap |
+| pgvector/pgvector image | `0.8.7-pg17` (digest `sha256:7d0a4146...ccb8`) | `docker buildx imagetools inspect` and the Docker Hub tag API both list `linux/amd64` and `linux/arm64`; the same holds for the 0.7.4 to 0.8.7 pg17 tags | multi-arch confirmed by manifest. Run locally on amd64 only: extension loaded, `<->` distance and tsvector queries worked |
+| python:3.12-slim-bookworm | base image | manifest lists `linux/amd64`, `linux/arm64/v8`, arm/v7 and others | |
+| ghcr.io/astral-sh/uv | 0.11.19 | manifest lists `linux/amd64` and `linux/arm64` | copied into the build stage only |
 | torch | 2.15.0 | cp311 `manylinux_2_28_aarch64` wheel, **484 MB** (x86_64: 539 MB); metadata lists `nvidia-*` Linux deps | heavy; needs CPU-only index, and verify CUDA packages are not pulled |
 | sentence-transformers | 6.2.0 | pure Python; requires torch, transformers, scikit-learn, scipy | pulls the heavy tree |
 | fastembed | 0.9.1 | pure-Python wheel, 150 KB; requires onnxruntime, tokenizers, numpy, pillow, loguru, mmh3, py-rust-stemmers, requests, huggingface-hub, tqdm | no torch; mmh3, py-rust-stemmers, pillow not yet checked for aarch64 |
 | bge-small-en-v1.5 ONNX | HF `onnx/model.onnx` | 133 MB fp32 in the official repo | architecture-independent file |
 
-Embedding runtime finding: ONNX Runtime + tokenizers + numpy is about 40 MB of wheels plus the 133 MB model, versus several hundred MB to GB for torch. Recommendation is in the project report and awaits PM approval. The embedder sits behind an interface, so switching is local to `app/retrieval/embedder.py`.
+Embedding runtime decision: ONNX Runtime + tokenizers + numpy is about 40 MB of wheels plus the 133 MB model, versus several hundred MB to over a gigabyte for torch. Approved by the PM; the embedder sits behind an interface local to `app/retrieval/embedder.py`.
+
+The backend image built locally on amd64 at 317 MB. The Dockerfile contains nothing architecture-specific, but it has not been built on arm64.
 
 ## 10. Response path and explanation correctness
 
@@ -299,7 +326,7 @@ Specified by the PM, not invented. Every policy document, seed row, UI screen an
 - Adds a 14-day cooling-off period: cancellation within 14 days of the first charge refunds that charge in full.
 
 ### 13.1 Required seed cases (straddling 2026-03-01 so both versions are exercised)
-At least one of each:
+At least one of each (eight cases):
 1. a refund computing above the v1 ceiling (7500) but below the v2 ceiling (12000)
 2. a promotional-discount order where list price and paid amount differ
 3. an order containing an accessed digital add-on alongside refundable items
@@ -307,5 +334,43 @@ At least one of each:
 5. a presumed-lost shipment with a replacement already sent
 6. an annual subscription inside the 60-day proration window
 7. a subscription inside the v2 cooling-off period
+8. an annual subscription under v2 cancelled on day 10 after the first charge, where both cooling-off and proration could fire (a test asserts cooling-off wins and fails if the evaluation order is reversed)
 
-Seed tests assert each case exists. Interpretation points to confirm with the PM when the rules are written (not decided silently): which refund policy version applies to an order placed under v1 but delivered or lost after 2026-03-01 (section 5 note 5 currently uses purchase date); whether proration or discount is applied first; how cooling-off interacts with annual proration.
+Seed tests assert each case exists. The interpretation points raised earlier are resolved in section 16.
+
+## 14. Embedding parity gate
+
+Blocking gate before retrieval is built on the ONNX embedder:
+1. In a **throwaway environment outside the project dependencies**, install sentence-transformers once and generate reference embeddings for at least 30 fixed strings, including real policy chunks, adversarial strings, and unicode edge cases (accents, CJK, emoji, empty-ish whitespace, very long text).
+2. Commit the reference vectors as a test fixture (`backend/tests/fixtures/embedding_parity.json`) recording the sentence-transformers version, the model name, and the model revision hash that produced them.
+3. The committed parity test loads the fixture and asserts cosine similarity of at least 0.999 against our ONNX implementation for every string. It runs in CI with no torch and no network (the ONNX model file is fetched by a setup script outside CI or cached; if the file is absent the test fails loudly rather than skipping).
+
+Pinned model: `BAAI/bge-small-en-v1.5`, revision `5c38ec7c405ec4b44b94cc5a9bb96e735b38267a`, verified via the Hugging Face API on 2026-11-10. Dimension 384.
+
+## 15. Python version
+
+Python 3.12 everywhere: `requires-python >=3.12`, `.python-version` is 3.12, ruff and mypy target 3.12, the Dockerfile uses `python:3.12-slim-bookworm`, and `uv` provisions 3.12 locally. No local/container version split.
+
+## 16. Policy interpretations (PM-resolved 2026-11-10)
+
+### 16.1 Version selection vs window measurement: two different anchors
+- **Version selection uses the purchase date.** An order placed 2026-02-20 and lost on 2026-03-10 is governed by refund policy v1, because refund terms form part of the purchase contract.
+- **Window measurement uses a different anchor.** Once the version is chosen, the refund window that version specifies is measured from the delivery date, or from the presumed-lost date if the shipment was never delivered.
+- These must never be conflated. Required test: a case where the purchase date selects v1 (30-day window) while the delivery or presumed-lost date falls after 2026-03-01, and the outcome differs depending on which anchor is used for which purpose. It must fail if the anchors are swapped or merged. The rule function takes `purchase_date` and `window_anchor_date` as separately named parameters.
+- **Rejected alternative:** "apply whichever version is more favorable to the customer." Considered and rejected for v1 scope because it roughly doubles the rule matrix for no additional engineering signal.
+
+### 16.2 Discount first, then prorate; and the paid-amount invariant
+- Always compute from the amount **actually paid**, never from list price, then apply proration to that. The reverse order can produce a refund above what the customer paid.
+- **System invariant (not a policy rule):** the sum of all refunds ever issued against an order can never exceed the amount actually paid for that order. It is enforced in code as the final check before any refund write, inside the same transaction that takes a row lock on the order, backed by a database-level guard (a trigger or constraint on cumulative refunded amount) so that violation is impossible rather than unlikely. It is tested directly, including with concurrent requests, and is independent of policy text. It must never be described as a policy rule.
+- Refund policy v2 additionally states "refund the amount actually paid" as customer-facing policy. v1 is silent and relies on the invariant. The two mechanisms stay separate: the policy text explains to the customer, the invariant protects the business regardless of what any policy says.
+
+### 16.3 Cancellation refund evaluation order (first match wins)
+Evaluate in this order and stop at the first rule that applies:
+1. **v2 cooling-off:** within 14 days of the first charge, refund that charge in full.
+2. **Proration:** within the first 60 days of an annual plan, refund unused whole months, less the 10 percent administrative fee under v1 only.
+3. **Otherwise:** cancellation takes effect at the end of the current billing period, with no refund.
+
+Cooling-off takes precedence where both could apply, as the more specific, more favorable, tightly time-bounded rule. Implementation is an ordered list of rule objects, iterated in order, not nested conditionals. Required test (seed case 8): annual plan under v2 cancelled on day 10; assert cooling-off wins; the test must fail if the evaluation order is reversed.
+
+### 16.4 Business days
+Monday to Friday, no holiday calendar. The rule lives in **one module** (`app/domain/rules/business_days.py`) with the definition in its docstring, and is listed in the README limitations section. A holiday calendar would be more correct and carries no signal; the undocumented simplification would be the defect.
