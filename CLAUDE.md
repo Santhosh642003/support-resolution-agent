@@ -58,13 +58,17 @@ No paid API access. This is a hard constraint, and the architecture must keep it
 All unit tests, all CI runs, and all business-rule tests pass with zero network calls using `FakeAdapter`. CI must never require an API key. Tests that need the network are marked and excluded from CI.
 
 ### Local embeddings
-sentence-transformers on CPU (e.g. `bge-small-en-v1.5` or `all-MiniLM-L6-v2`). No embedding API. Pin model name and revision; store the embedding model identifier alongside every stored vector so a model change is detectable, not silent; record the resulting pgvector dimension.
+Local CPU embeddings of `bge-small-en-v1.5` (384-dim); runtime (sentence-transformers vs ONNX Runtime) pending PM decision. No embedding API. Pin model name and revision; store the embedding model identifier alongside every stored vector so a model change is detectable, not silent; record the resulting pgvector dimension.
 
 ### arm64 build constraint
 All Docker images must build and run on `linux/arm64` (OCI Ampere A1). Flag any dependency that is x86-only or lacks Arm wheels as soon as it is noticed. Assume a small instance; keep memory modest; no GPU.
 
 ## Conventions
 
+- **LLM call budget: at most 2 calls per case** (extraction, explanation). A third needs PM approval.
+- **Fail closed on explanation mismatch:** the customer sees the rules engine's Decision, never the model's numbers; disagreement escalates to handoff.
+- FakeAdapter fixtures are keyed by scenario ID + step index; the prompt hash is a staleness warning only.
+- Record arm64 availability and evidence in `docs/SPEC.md` section 9 when adding any heavy dependency. No arm64 CI job; real verification is a native build on OCI at M4.
 - Small commits; tests alongside the code they cover.
 - Never commit secrets. `.env` is git-ignored; provide `.env.example` with placeholder values only.
 - **Ask before adding a dependency or expanding scope.**

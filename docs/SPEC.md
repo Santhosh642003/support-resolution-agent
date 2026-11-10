@@ -116,7 +116,7 @@ Design choice: **the structured-output contract is implemented in our code** (JS
 ### 4.2 Adapters (`app/llm/adapters/`)
 - `GroqAdapter`: OpenAI-compatible HTTP; `base_url` and key from env. Prefer plain `httpx` to the OpenAI-compatible endpoint over a vendor SDK (fewer dependencies; ask before adding the `openai` package).
 - `GeminiAdapter`: secondary, different request/response shape, translated to the same interface.
-- `FakeAdapter`: reads fixtures from `tests/fixtures/llm/`, keyed by `sha256(canonical(request))`. A missing fixture raises `FixtureMissing` loudly (never invents output). A `RECORD=1` mode, run manually with a real provider, writes new fixtures.
+- `FakeAdapter`: reads fixtures from `tests/fixtures/llm/`, **keyed by scenario ID + step index** (PM decision 2026-11-10). The prompt hash is stored in the fixture as a staleness check only: on mismatch the adapter logs a loud warning naming the scenario and step and still returns the fixture (not a silent miss, not a hard failure). A missing scenario/step raises `FixtureMissing` (never invents output). A `RECORD=1` mode, run manually with a real provider, writes new fixtures. Staleness warnings are counted and surfaced in the test summary.
 - Selection: `LLM_PROVIDER=groq|gemini|fake`, `LLM_MODEL=<id>`; model names appear only in `.env` and adapter defaults. A test greps the tree for vendor imports and model-name strings outside the adapter package and `.env.example`.
 
 ### 4.3 Rate limiting and retry (`app/llm/ratelimit.py`)
@@ -126,7 +126,7 @@ Design choice: **the structured-output contract is implemented in our code** (JS
 - Workflow mapping: any of these errors during intent classification gives a "service busy, try again" with state `FAILED`/`PENDING` and handoff offer; during explanation, the deterministic decision is still shown using a templated (non-model) message. No path produces a success claim.
 
 ### 4.4 Cache (`app/llm/cache.py`)
-Key = `sha256(provider, model, canonical full prompt, temperature, tool_schema_version)`. Stored in `llm_cache`. Modes: `read_write` (default), `replay_only` (miss raises `CacheMiss`, used by eval replays so reruns cost zero calls and are identical), `off`. Each lookup records hit/miss in `llm_calls` and the trace; eval reports include cache-hit rate. Responses with errors or invalid structure are not cached.
+Key = `sha256(provider, model, canonical full prompt, temperature, tool_schema_version, prompt_template_version)`. Prompt template version is in the key so prompt drift produces a miss, not a stale hit. Stored in `llm_cache`. Modes: `read_write` (default), `replay_only` (miss raises `CacheMiss`, used by eval replays so reruns cost zero calls and are identical), `off`. Each lookup records hit/miss in `llm_calls` and the trace; eval reports include cache-hit rate. Responses with errors or invalid structure are not cached.
 
 ### 4.5 Request path
 ```
@@ -137,7 +137,7 @@ LLMClient: cache lookup -> [hit: return] -> rate limiter -> adapter -> retry/bac
 Order matters: cache sits **outside** the limiter, so hits consume no quota. The `FakeAdapter` sits at the adapter position, so the cache, limiter, and validation logic are all exercised in CI without network.
 
 ### 4.6 Embeddings
-`app/retrieval/embedder.py` wraps sentence-transformers (CPU), pinned name and revision hash, loaded once per process. Not part of the LLM provider interface and not a vendor LLM API. Documents are re-embedded only when `content_hash` or model id changes.
+`app/retrieval/embedder.py` wraps a local CPU embedder for bge-small-en-v1.5 (384-dim) with pinned name and revision hash (HF commit `5c38ec7c405ec4b44b94cc5a9bb96e735b38267a` as seen 2026-11-10; re-verify when pinning), loaded once per process. Runtime (sentence-transformers/torch vs ONNX Runtime) is pending PM decision; see section 9. Not part of the LLM provider interface and not a vendor LLM API. Documents are re-embedded only when `content_hash` or model id changes.
 
 ## 5. Cross-cutting design notes
 
@@ -201,3 +201,111 @@ M1 goal: one order-status conversation works end to end with citations. Each tas
 15. **M1 demo script + README section** documenting the end-to-end conversation.
 
 M1 exit check: scripted conversation "Where is my order #X?" passes in CI using fixtures, and one manual run against Groq succeeds and is cached.
+
+## 8. Decisions log (PM-approved 2026-11-10)
+
+- Embedding model bge-small-en-v1.5, revision pinned; Groq via `httpx` (no `openai` SDK); `uv`, `ruff`, `mypy`; Alembic + SQLAlchemy 2.0 + psycopg 3; Vite + React + TypeScript with no UI library in M1; minimal session login in M1, hardening in M2.
+- Two versions per policy; change date (2026-03-01) inside the seeded order range.
+- Locked `eval/heldout/` with a hash manifest and a CI check that fails if locked files change.
+- **No arm64 CI job.** Dockerfiles stay architecture-neutral; arm64 availability of each heavy dependency is recorded in section 9 with evidence; real arm64 verification is a native build on OCI at M4.
+- Assumptions 1-15 from the first report accepted. Load-bearing: confirmation is a UI button posting a single-use token (never typed "yes"); live state is re-fetched and rules re-run at execution time, re-proposing if the decision changed (TOCTOU handling is a release requirement); combined requests are split into separate actions with separate Decision records.
+- **Deployment fallback:** attempt OCI A1; if capacity is unavailable, ship a recorded demo plus a documented docker compose quickstart and note the capacity issue in the README. Cap OCI capacity effort at two hours.
+
+## 9. Dependency arm64 / weight evidence
+
+Checked 2026-11-10 against PyPI JSON metadata (wheel filenames) and the Hugging Face API. "Has aarch64 wheel" means a `manylinux*_aarch64` wheel exists for CPython 3.11 (or abi3) at the listed version. This is metadata evidence only; real runtime verification happens at M4 on OCI.
+
+| Dependency | Version checked | aarch64 evidence | Notes |
+|---|---|---|---|
+| pydantic-core | 2.50.4 | `manylinux2014_aarch64` cp311/cp312 wheel, 2.1 MB | via FastAPI/pydantic |
+| psycopg-binary | 3.3.8 | `manylinux_2_28_aarch64` cp311/cp312 wheel, 6.9 MB | not yet added (task 3) |
+| tokenizers | 0.23.3 | `cp310-abi3-manylinux_2_17_aarch64` wheel, 3.5 MB | |
+| onnxruntime | 1.31.1 | cp311/cp312 `manylinux_2_28_aarch64` wheel, 21.4 MB | |
+| numpy | 2.5.4 | cp312 `manylinux_2_27_aarch64` wheel, 15.7 MB; no cp311 aarch64 wheel matched my filter for this release | use Python 3.12 in Docker or verify the resolved version |
+| torch | 2.15.0 | cp311 `manylinux_2_28_aarch64` wheel, **484 MB** (x86_64: 539 MB); metadata lists `nvidia-*` Linux deps | heavy; needs CPU-only index, and verify CUDA packages are not pulled |
+| sentence-transformers | 6.2.0 | pure Python; requires torch, transformers, scikit-learn, scipy | pulls the heavy tree |
+| fastembed | 0.9.1 | pure-Python wheel, 150 KB; requires onnxruntime, tokenizers, numpy, pillow, loguru, mmh3, py-rust-stemmers, requests, huggingface-hub, tqdm | no torch; mmh3, py-rust-stemmers, pillow not yet checked for aarch64 |
+| bge-small-en-v1.5 ONNX | HF `onnx/model.onnx` | 133 MB fp32 in the official repo | architecture-independent file |
+
+Embedding runtime finding: ONNX Runtime + tokenizers + numpy is about 40 MB of wheels plus the 133 MB model, versus several hundred MB to GB for torch. Recommendation is in the project report and awaits PM approval. The embedder sits behind an interface, so switching is local to `app/retrieval/embedder.py`.
+
+## 10. Response path and explanation correctness
+
+### 10.1 Structured explanation output
+The explanation call returns a validated object:
+`{outcome, amount_cents, policy_ids_cited[], explanation_text}`.
+
+### 10.2 Fail-closed display rule
+The customer-facing outcome, amount, and cited policy IDs always come from the rules engine's **Decision record**, never from the model. The model's `outcome`, `amount_cents`, and `policy_ids_cited` exist only to be compared against the Decision. If any disagree, or the output fails validation, the turn **fails closed**: neither value is displayed, the faithfulness failure is logged, and the conversation moves to `HANDED_OFF` with a templated non-model message. `explanation_text` is shown only after the comparison passes, and is also scanned for any currency amount that differs from the Decision.
+
+### 10.3 Metrics
+1. **Faithfulness (deterministic):** per case, assert outcome, amount_cents and policy_ids equal the Decision. Every mismatch is counted and reported (rate with a binomial CI, plus examples).
+2. **Citation support (sampled):** does the cited policy text support the stated basis? A fixed sample is audited manually against a written rubric (`eval/rubric.md`, written before M3); the remainder is model-judged. The report states the sample size and the human/model agreement rate (percent agreement and Cohen's kappa). Model-only grading is never reported as evidence.
+
+## 11. LLM call budget and resumable eval runner
+
+- **Hard cap: 2 LLM calls per case** (1: intent + entity extraction; 2: explanation). A third call requires PM approval with a reason. The orchestrator enforces the cap in code, and the eval report instruments and asserts per-case call counts, so a regression is visible (a CI test fails if any fixture case exceeds 2). Repair retries for invalid structured output count against the cap; if the cap blocks a repair, the turn fails closed.
+- **Resumable runner, designed in from the start:** each completed case is checkpointed to Postgres (`eval_runs`, `eval_case_results`). `--resume` skips completed cases; `--replay-only` errors on a cache miss instead of calling live. Per case we record: provider, model ID, prompt template version, cache hit/miss, and cache snapshot identifier. An interrupted run never restarts from zero.
+
+## 12. Adversarial and failure-injection suite
+
+Minimum 40 cases, at least 4 per family. Every zero-failure claim is reported with a binomial confidence interval (Clopper-Pearson 95%; 0 failures in 40 gives an upper bound of about 8.8%, and the report must say so).
+
+1. Cross-customer read and write via identifier manipulation
+2. Prompt injection inside retrieved policy documents
+3. Prompt injection inside the customer message or order notes
+4. Replay of a confirmation token
+5. Concurrent duplicate confirmed requests (a genuine race: real concurrent connections against Postgres)
+6. Stale decision: live state changes between propose and execute
+7. Amount manipulation: customer asserts a larger refund and cites invented policy
+8. Policy version confusion: customer claims newer terms apply to an older order
+9. Downstream timeout that later succeeds in the background
+10. Quota exhaustion partway through a workflow
+
+### 12.1 Simulated payments service
+A separate in-repo module with its own process boundary and store that **honors idempotency keys itself** (same key returns the original result; same key with a different payload is rejected) and can be told to model: normal success, definite failure, a request that **times out from our side but succeeds downstream** (committed after the client gives up), and slow responses. Without the timeout-then-succeeds mode the exactly-once guarantee is untested. Reconciliation queries it by idempotency key.
+
+## 13. Seeded policy content (SIMULATED BUSINESS)
+
+Specified by the PM, not invented. Every policy document, seed row, UI screen and report is labeled as a simulated business. Money is integer cents. "Business days" means Monday to Friday with no holiday calendar (assumption).
+
+**Shipping policy (single version)**
+- Standard domestic delivery window: 7 business days from ship date.
+- A shipment is presumed lost if undelivered 10 business days after ship date.
+- A replacement shipment carries its own window measured from its own ship date.
+
+**Refund policy v1** (effective 2025-06-01 to 2026-02-28)
+- Refund window: 30 days from delivery date, or from the presumed-lost date if never delivered.
+- Lost or undelivered shipments: full refund of the shipment value.
+- Auto-approve ceiling: 7500 cents; above that, human review.
+- Partially consumed subscription boxes: prorated by items shipped.
+- Digital add-ons: non-refundable once accessed.
+- Items flagged `final_sale`: non-refundable regardless of window.
+
+**Refund policy v2** (effective 2026-03-01)
+- Refund window extended to 45 days.
+- Auto-approve ceiling raised to 12000 cents.
+- A carrier "delivery exception" status permits a lost-shipment refund without waiting the full presumed-lost window.
+- Orders placed with a promotional discount refund the amount actually paid, never list price.
+- Digital add-on and `final_sale` rules unchanged.
+
+**Cancellation policy v1** (effective 2025-06-01 to 2026-02-28)
+- Cancellation permitted at any time, effective at the end of the current billing period.
+- The current period is not refunded.
+- Annual plans: prorated refund of unused whole months, less a 10 percent administrative fee, available within the first 60 days only.
+
+**Cancellation policy v2** (effective 2026-03-01)
+- As v1, but the administrative fee is removed.
+- Adds a 14-day cooling-off period: cancellation within 14 days of the first charge refunds that charge in full.
+
+### 13.1 Required seed cases (straddling 2026-03-01 so both versions are exercised)
+At least one of each:
+1. a refund computing above the v1 ceiling (7500) but below the v2 ceiling (12000)
+2. a promotional-discount order where list price and paid amount differ
+3. an order containing an accessed digital add-on alongside refundable items
+4. a `final_sale` item
+5. a presumed-lost shipment with a replacement already sent
+6. an annual subscription inside the 60-day proration window
+7. a subscription inside the v2 cooling-off period
+
+Seed tests assert each case exists. Interpretation points to confirm with the PM when the rules are written (not decided silently): which refund policy version applies to an order placed under v1 but delivered or lost after 2026-03-01 (section 5 note 5 currently uses purchase date); whether proration or discount is applied first; how cooling-off interacts with annual proration.
