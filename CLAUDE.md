@@ -76,6 +76,8 @@ All Docker images must build and run on `linux/arm64` (OCI Ampere A1). Flag any 
 - **Fail closed on explanation mismatch:** the customer sees the rules engine's Decision, never the model's numbers; disagreement escalates to handoff.
 - FakeAdapter fixtures are keyed by scenario ID + step index; the prompt hash is a staleness warning only.
 - Record arm64 availability and evidence in `docs/SPEC.md` section 9 when adding any heavy dependency. No arm64 CI job; real verification is a native build on OCI at M4.
+- **Stage named paths, never `git add -A`** (a private key was once swept into a commit that way; see `docs/FAILURE_ANALYSIS.md` F-004). Scan the history for secrets and read the result before every push.
+- Log real defects in `docs/FAILURE_ANALYSIS.md` with the test that exposed them.
 - Small commits; tests alongside the code they cover.
 - Never commit secrets. `.env` is git-ignored; provide `.env.example` with placeholder values only.
 - **Ask before adding a dependency or expanding scope.**

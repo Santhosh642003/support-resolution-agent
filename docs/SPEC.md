@@ -45,9 +45,9 @@ Triggered by: rule engine `needs_human`, denied-but-disputed, repeated failures,
 
 **The authoritative schema is the Alembic migrations** (`backend/alembic/versions/0001_*`, `0002_*`); this section summarizes the design and what the database itself enforces. Money is `bigint` cents, timestamps are `timestamptz`, IDs are UUIDs. All data is synthetic.
 
-Tables in migrations 0001/0002: `customers`, `auth_sessions`, `products`, `subscriptions`, `orders`, `order_items`, `shipments`, `shipment_events`, `policy_documents`, `policy_chunks`, `conversations`, `messages`, `decisions`, `decision_policies`, `confirmation_tokens`, `actions`, `refunds`, `audit_log`, plus the view `v_refund_drift`. Planned for later migrations: `handoffs`, `llm_cache`, `llm_calls`, `tool_calls`, `retrieval_logs`, `eval_runs`, `eval_case_results`.
+Tables in migrations 0001/0002: `customers`, `auth_sessions`, `products`, `subscriptions`, `orders`, `order_items`, `shipments`, `shipment_events`, `policy_documents`, `policy_chunks`, `conversations`, `messages`, `decisions`, `decision_policies`, `confirmation_tokens`, `actions`, `refunds`, `refund_lines` (migration 0003), `audit_log`, plus the views `v_refund_drift` and `v_refund_line_drift`. Planned for later migrations: `handoffs`, `llm_cache`, `llm_calls`, `tool_calls`, `retrieval_logs`, `eval_runs`, `eval_case_results`.
 
-Changes from the first draft: `proposals` is replaced by first-class `decisions` plus `confirmation_tokens`; `refunds` are per order (not per line), with the paid-amount invariant enforced at order level; `payments` is dropped from the core schema because the simulated payments service (section 12.1) owns its own store and `orders.paid_cents` records what was actually paid; per-item refund allocation is deferred.
+Changes from the first draft: `proposals` is replaced by first-class `decisions` plus `confirmation_tokens`; `refunds` are line-level (PM override, migration 0003): a refund header has one or more `refund_lines`, and the paid-amount invariant is enforced at both levels; `payments` is dropped from the core schema because the simulated payments service (section 12.1) owns its own store and `orders.paid_cents` records what was actually paid.
 
 ### 2.1 What the database enforces
 | Guarantee | Mechanism |
@@ -58,7 +58,8 @@ Changes from the first draft: `proposals` is replaced by first-class `decisions`
 | No overlapping policy versions | `EXCLUDE USING gist (policy_type WITH =, validity WITH &&)` on `policy_documents`. **`btree_gist` is installed solely for this constraint**: it lets a gist index combine the equality on `policy_type` with the range-overlap operator. |
 | Money | `bigint` everywhere, `CHECK >= 0`; `paid = list - discount + shipping` is a CHECK; a test asserts every `*_cents` column is `bigint` and no float/numeric column exists |
 | Decision before action | `actions.decision_id NOT NULL` + composite FK; an `actions` trigger requires the decision to be `allowed`/`allowed_with_conditions` and the action type and amount to equal the decision's. Decisions are immutable and store `input_state`, `reason_codes`, `rule_set_version`, and (via `decision_policies`) the policy versions applied. |
-| Paid-amount invariant | `CHECK (refunded_total_cents <= paid_cents)` on `orders` (`orders_refund_within_paid`); `refunds` INSERT trigger is the only maintainer of the running total, so a refund row cannot exist without the check running. Not a policy rule. |
+| Paid-amount invariant | `CHECK (refunded_total_cents <= paid_cents)` on `orders` (`orders_refund_within_paid`); the `refunds` INSERT trigger is the only maintainer of the running total, so a refund row cannot exist without the check running. Not a policy rule. |
+| Per-line cumulative guard | `order_items.refunded_cents` with `CHECK (refunded_cents <= paid_cents)` (`order_items_refunded_within_paid`), maintained only by the `refund_lines` INSERT trigger. `UNIQUE (refund_id, order_item_id)`; composite FKs force a line's refund and item to share one order and one customer. A deferred constraint trigger requires every refund header to equal the sum of its lines (and have at least one) at commit. Rules decide each line independently and the refund is the sum; no proportional splitting of order-level discounts beyond what `order_items.paid_cents` already encodes. |
 | Ownership | see 2.2 |
 
 Single action status flow is `pending` to `succeeded|failed` only; a final action cannot change.
@@ -69,10 +70,10 @@ Single action status flow is `pending` to `succeeded|failed` only; a final actio
 - **How a missing filter is caught:** (1) a schema test fails if any customer-scoped table lacks `customer_id NOT NULL`; (2) cross-customer integration tests (adversarial family 1) run against every repository function and assert zero rows/404 for another customer's IDs; (3) writes cannot cross customers regardless, thanks to the composite FKs. **Not enforced by the database today:** a missing `WHERE` on a *read* would not be stopped by the database. Row-level security with a non-superuser app role would close that gap (proposed for M2 hardening; see the task report).
 
 ### 2.3 Drift assertion
-`orders.refunded_total_cents` is denormalized. `v_refund_drift` recomputes `SUM(refunds.amount_cents)` per order; `assert_no_refund_drift()` (`app/db/invariants.py`) raises if any order differs. It runs in CI against seeded data and again after each evaluation suite run.
+`orders.refunded_total_cents` and `order_items.refunded_cents` are denormalized. `v_refund_drift` recomputes `SUM(refunds.amount_cents)` per order; `v_refund_line_drift` checks each item's total against its lines and each order's total against the sum of all its lines. `assert_no_refund_drift()` (`app/db/invariants.py`) raises if either level disagrees. It runs in CI against seeded data and again after each evaluation suite run.
 
 ### 2.4 Concurrency (adversarial family 5)
-The execute path takes `SELECT ... FROM orders WHERE id=$1 FOR UPDATE` before computing and writing, re-runs the rules on the locked row, and inserts the refund in the same transaction. `tests/db/test_concurrent_refunds.py` runs two real connections on two threads against Postgres, both attempting the same full refund: with the lock exactly one refunds and the other declines cleanly; with the lock deliberately skipped, the database still rejects the second via `orders_refund_within_paid`.
+The execute path takes `SELECT ... FROM orders WHERE id=$1 FOR UPDATE` before computing and writing, re-runs the rules on the locked row, and inserts the refund header and its lines in the same transaction. `tests/db/test_concurrent_refunds.py` runs two real connections on two threads against Postgres, both attempting the same full refund: with the lock exactly one refunds and the other declines cleanly; with the lock deliberately skipped, the database still rejects the second via `orders_refund_within_paid`.
 
 ### 2.5 Time
 Use `clock_timestamp()` where wall-clock matters for expiry. `now()` is frozen at transaction start, so a long execution transaction would otherwise never observe a token expiring (found by a failing test).
@@ -386,3 +387,28 @@ Cooling-off takes precedence where both could apply, as the more specific, more 
 
 ### 16.4 Business days
 Monday to Friday, no holiday calendar. The rule lives in **one module** (`app/domain/rules/business_days.py`) with the definition in its docstring, and is listed in the README limitations section. A holiday calendar would be more correct and carries no signal; the undocumented simplification would be the defect.
+
+## 17. Row-level security and database roles (M2 task 0, PM-approved 2026-11-10)
+
+Converts ownership (requirement g) from convention to enforcement and addresses section 2.6. Done at the start of M2, before repositories multiply. Each of the four points below is a way RLS silently does nothing.
+
+### 17.1 Roles: who owns what
+| Role | Purpose | Attributes |
+|---|---|---|
+| bootstrap superuser (compose `POSTGRES_USER`, OCI admin) | creates databases and roles only; never used by the app or by tests | superuser |
+| `support_owner` | owns all tables, runs Alembic migrations | `LOGIN`, not superuser, `NOBYPASSRLS` |
+| `support_app` | the application's runtime role | `LOGIN`, `NOSUPERUSER`, `NOBYPASSRLS`, **not the owner** of any table; grants limited to the DML it needs (SELECT/INSERT/UPDATE per table as required; no DELETE, TRUNCATE, DDL, or trigger control; no TRIGGER privilege) |
+Superusers and table owners bypass RLS, so the app role must be neither.
+
+### 17.2 Policies
+- `ENABLE ROW LEVEL SECURITY` and `FORCE ROW LEVEL SECURITY` on every customer-scoped table (force is defense in depth against a future ownership mistake). Policy: `customer_id = current_setting('app.current_customer_id', true)::uuid`. An unset setting yields NULL and therefore no rows (fails closed). `customers` is protected on `id`. Reference data (`products`, `policy_*`) is read-only to the app role and not customer-scoped.
+- The current customer is set with `SET LOCAL` (`set_config('app.current_customer_id', :id, true)`), **never `SET`**. Session-scoped state leaks across requests through a connection pool, which would be a cross-customer leak introduced by the very feature meant to prevent one. The transaction wraps the whole request, so the setting is transaction-scoped.
+
+### 17.3 Tests
+- Every RLS test connects as `support_app`. A test run as the compose superuser proves nothing.
+- One test deliberately connects as the superuser and asserts the policy is bypassed, so the suite documents the boundary instead of hiding it.
+- A pool test checks that a connection reused by a second request carries no customer setting from the first.
+- Missing-setting test: queries with no customer set return zero rows.
+
+### 17.4 Deployment
+Role creation lives in a bootstrap script (`db/roles.sql`), referenced by `docs/DEPLOYMENT.md` so it does not evaporate at the OCI step. Passwords come from the environment, never the repository.

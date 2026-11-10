@@ -29,6 +29,30 @@ def make_customer(conn: Connection) -> UUID:
     )
 
 
+def make_product(conn: Connection) -> UUID:
+    return one_uuid(
+        conn,
+        "INSERT INTO products (sku, name, price_cents) VALUES (:s, 'Simulated item', 100)"
+        " RETURNING id",
+        s=uuid4().hex,
+    )
+
+
+def make_item(
+    conn: Connection, customer_id: UUID, order_id: UUID, paid: int, *, final_sale: bool = False
+) -> UUID:
+    return one_uuid(
+        conn,
+        "INSERT INTO order_items (order_id, customer_id, product_id, qty, unit_price_cents,"
+        " paid_cents, final_sale) VALUES (:o, :c, :p, 1, :paid, :paid, :fs) RETURNING id",
+        o=order_id,
+        c=customer_id,
+        p=make_product(conn),
+        paid=paid,
+        fs=final_sale,
+    )
+
+
 def make_order(
     conn: Connection,
     customer_id: UUID,
@@ -37,8 +61,11 @@ def make_order(
     discount: int = 0,
     shipping: int = 0,
     placed_at: datetime | None = None,
+    items: list[int] | None = None,
 ) -> UUID:
-    return one_uuid(
+    """Create an order. By default it has ONE item paid for list_total - discount; pass
+    `items=[...]` (paid amounts) for several. Shipping is not part of any item."""
+    order_id = one_uuid(
         conn,
         "INSERT INTO orders (order_number, customer_id, placed_at, list_total_cents,"
         " discount_cents, shipping_cents, paid_cents)"
@@ -51,6 +78,17 @@ def make_order(
         s=shipping,
         paid=list_total - discount + shipping,
     )
+    for paid in items if items is not None else [list_total - discount]:
+        make_item(conn, customer_id, order_id, paid)
+    return order_id
+
+
+def item_ids(conn: Connection, order_id: UUID) -> list[UUID]:
+    rows = conn.execute(
+        text("SELECT id FROM order_items WHERE order_id = :o ORDER BY paid_cents DESC, id"),
+        {"o": order_id},
+    )
+    return [r.id for r in rows]
 
 
 def make_conversation(conn: Connection, customer_id: UUID) -> UUID:
@@ -104,9 +142,16 @@ def make_action(
 
 
 def make_refund(
-    conn: Connection, customer_id: UUID, order_id: UUID, action_id: UUID, amount: int
+    conn: Connection,
+    customer_id: UUID,
+    order_id: UUID,
+    action_id: UUID,
+    amount: int,
+    *,
+    lines: list[tuple[UUID, int]] | None = None,
 ) -> UUID:
-    return one_uuid(
+    """Insert a refund header and its lines. Default: one line on the order's first item."""
+    refund_id = one_uuid(
         conn,
         "INSERT INTO refunds (action_id, order_id, customer_id, amount_cents)"
         " VALUES (:a, :o, :c, :amt) RETURNING id",
@@ -115,6 +160,17 @@ def make_refund(
         c=customer_id,
         amt=amount,
     )
+    for item_id, line_amount in (
+        lines if lines is not None else [(item_ids(conn, order_id)[0], amount)]
+    ):
+        conn.execute(
+            text(
+                "INSERT INTO refund_lines (refund_id, order_item_id, order_id, customer_id,"
+                " amount_cents) VALUES (:r, :i, :o, :c, :amt)"
+            ),
+            {"r": refund_id, "i": item_id, "o": order_id, "c": customer_id, "amt": line_amount},
+        )
+    return refund_id
 
 
 def make_token(

@@ -22,8 +22,8 @@ class Outcome:
     detail: str = ""
 
 
-def _seed(engine: Engine) -> tuple[UUID, UUID]:
-    """Committed rows (the racers run on other connections). Returns (customer, order)."""
+def _seed(engine: Engine) -> tuple[UUID, UUID, UUID]:
+    """Committed rows (the racers run on other connections). Returns (customer, order, item)."""
     with engine.begin() as c:
         cust = c.execute(
             text(
@@ -39,7 +39,20 @@ def _seed(engine: Engine) -> tuple[UUID, UUID]:
             ),
             {"n": f"SIM-{uuid4().hex[:10]}", "c": cust, "p": PAID},
         ).scalar_one()
-    return cust, order
+        product = c.execute(
+            text(
+                "INSERT INTO products (sku, name, price_cents) VALUES (:s, 'x', 100) RETURNING id"
+            ),
+            {"s": uuid4().hex},
+        ).scalar_one()
+        item = c.execute(
+            text(
+                "INSERT INTO order_items (order_id, customer_id, product_id, qty,"
+                " unit_price_cents, paid_cents) VALUES (:o, :c, :p, 1, :a, :a) RETURNING id"
+            ),
+            {"o": order, "c": cust, "p": product, "a": PAID},
+        ).scalar_one()
+    return cust, order, item
 
 
 def _prepare_decision_and_action(engine: Engine, cust: UUID, order: UUID) -> tuple[UUID, str]:
@@ -69,7 +82,7 @@ def _prepare_decision_and_action(engine: Engine, cust: UUID, order: UUID) -> tup
 
 
 def _race(engine: Engine, use_row_lock: bool) -> list[Outcome]:
-    cust, order = _seed(engine)
+    cust, order, item = _seed(engine)
     actions = [_prepare_decision_and_action(engine, cust, order) for _ in range(2)]
     barrier = threading.Barrier(2)
     outcomes = [Outcome(), Outcome()]
@@ -94,12 +107,19 @@ def _race(engine: Engine, use_row_lock: bool) -> list[Outcome]:
                         return
                 else:
                     c.execute(text("SELECT pg_sleep(0.3)"))  # naive: no lock, no re-check
-                c.execute(
+                refund_id = c.execute(
                     text(
                         "INSERT INTO refunds (action_id, order_id, customer_id, amount_cents)"
-                        " VALUES (:a, :o, :c, :amt)"
+                        " VALUES (:a, :o, :c, :amt) RETURNING id"
                     ),
                     {"a": action_id, "o": order, "c": cust, "amt": AMOUNT},
+                ).scalar_one()
+                c.execute(
+                    text(
+                        "INSERT INTO refund_lines (refund_id, order_item_id, order_id,"
+                        " customer_id, amount_cents) VALUES (:r, :i, :o, :c, :amt)"
+                    ),
+                    {"r": refund_id, "i": item, "o": order, "c": cust, "amt": AMOUNT},
                 )
             outcomes[i] = Outcome("refunded")
         except (IntegrityError, DBAPIError) as exc:

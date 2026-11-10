@@ -193,12 +193,15 @@ def test_decisions_and_refunds_are_immutable(conn: Connection) -> None:
     d = make_decision(conn, c, o)
     a = make_action(conn, c, d)
     make_refund(conn, c, o, a, 5000)
+    # Fire the deferred header/lines check first, so TRUNCATE reaches the append-only trigger
+    # rather than failing on pending trigger events (SQLSTATE 55006).
+    conn.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
     for sql in (
         "UPDATE decisions SET amount_cents = 1",
         "DELETE FROM decisions",
         "UPDATE refunds SET amount_cents = 1",
         "DELETE FROM refunds",
-        "TRUNCATE refunds",
+        "TRUNCATE refunds CASCADE",  # plain TRUNCATE is also blocked natively by the FK (0A000)
     ):
         state, _ = expect_fail(conn, sql)
         assert state == "23001", sql
