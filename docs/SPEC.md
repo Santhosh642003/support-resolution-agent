@@ -43,34 +43,42 @@ Triggered by: rule engine `needs_human`, denied-but-disputed, repeated failures,
 
 ## 2. Data model (PostgreSQL)
 
-Money is `integer` minor units plus `currency` char(3). Timestamps are `timestamptz`. IDs are UUIDs except human-facing order numbers. Every table that is synthetic carries no real PII.
+**The authoritative schema is the Alembic migrations** (`backend/alembic/versions/0001_*`, `0002_*`); this section summarizes the design and what the database itself enforces. Money is `bigint` cents, timestamps are `timestamptz`, IDs are UUIDs. All data is synthetic.
 
-| Table | Key columns |
+Tables in migrations 0001/0002: `customers`, `auth_sessions`, `products`, `subscriptions`, `orders`, `order_items`, `shipments`, `shipment_events`, `policy_documents`, `policy_chunks`, `conversations`, `messages`, `decisions`, `decision_policies`, `confirmation_tokens`, `actions`, `refunds`, `audit_log`, plus the view `v_refund_drift`. Planned for later migrations: `handoffs`, `llm_cache`, `llm_calls`, `tool_calls`, `retrieval_logs`, `eval_runs`, `eval_case_results`.
+
+Changes from the first draft: `proposals` is replaced by first-class `decisions` plus `confirmation_tokens`; `refunds` are per order (not per line), with the paid-amount invariant enforced at order level; `payments` is dropped from the core schema because the simulated payments service (section 12.1) owns its own store and `orders.paid_cents` records what was actually paid; per-item refund allocation is deferred.
+
+### 2.1 What the database enforces
+| Guarantee | Mechanism |
 |---|---|
-| `customers` | id, email (fake), display_name, password_hash (demo auth), created_at |
-| `auth_sessions` | id, customer_id, expires_at, created_at, revoked_at |
-| `products` | id, sku, name, price_cents |
-| `orders` | id, order_number, customer_id, placed_at, status, total_cents, shipping_cents, currency, subscription_id (nullable), is_replacement_for (nullable order id) |
-| `order_items` | id, order_id, product_id, qty, unit_price_cents, refunded_cents |
-| `shipments` | id, order_id, carrier, tracking_no, status, shipped_at, delivered_at, expected_at |
-| `shipment_events` | id, shipment_id, occurred_at, code, detail |
-| `subscriptions` | id, customer_id, plan, status, started_at, current_period_end, commitment_end, canceled_at, cancel_effective_at, price_cents |
-| `payments` | id, order_id, amount_cents, status, provider_ref (fake) |
-| `policy_documents` | id, policy_key (shipping/refund/cancellation), version, effective_from, effective_to, title, source_path, content_hash |
-| `policy_chunks` | id, document_id, ordinal, text, tsv (tsvector), embedding vector(384), embedding_model (text, NOT NULL), embedding_model_revision |
-| `conversations` | id, customer_id, state, created_at, tool_calls_used |
-| `messages` | id, conversation_id, role, content, created_at, injection_flags |
-| `proposals` | id, conversation_id, customer_id, action_type, params jsonb, decision jsonb, policy_version_refs jsonb, confirmation_token_hash, expires_at, consumed_at |
-| `actions` | id, proposal_id, customer_id, action_type, idempotency_key (UNIQUE), status (pending/succeeded/failed), result jsonb, created_at, completed_at |
-| `refunds` | id, action_id, order_id, order_item_id, amount_cents, status; partial UNIQUE (order_item_id) WHERE status <> 'voided' |
-| `audit_log` | id, at, actor_type (customer/system/human), actor_id, event, entity_type, entity_id, before jsonb, after jsonb; append-only (revoke UPDATE/DELETE) |
-| `handoffs` | id, conversation_id, reason, evidence jsonb, status, assigned_to, created_at |
-| `llm_cache` | key_hash (PK), provider, model, request jsonb, response jsonb, tokens_in, tokens_out, created_at |
-| `llm_calls` | id, conversation_id, step, cache_hit, provider, model, tokens_in, tokens_out, model_ms, status, error_class |
-| `tool_calls` | id, conversation_id, step, tool, args jsonb, result_summary, tool_ms, status |
-| `retrieval_logs` | id, conversation_id, query, fts_hits, vector_hits, fused jsonb, embedding_model |
+| Idempotency | `CREATE UNIQUE INDEX actions_idempotency_key_uq ON actions (idempotency_key)`; also `actions_decision_uq UNIQUE (decision_id)` so a decision executes at most once. The app catches the unique violation (SQLSTATE 23505, constraint name) and returns the original receipt. No pre-flight SELECT. |
+| Single-use confirmation tokens | Conditional `UPDATE ... WHERE token_hash=$1 AND customer_id=$2 AND decision_id=$3 AND used_at IS NULL AND expires_at > clock_timestamp() RETURNING ...` (`app/db/tokens.py`); a guard trigger also forbids un-using, retargeting, deleting, or using an expired token. Only the SHA-256 of the token is stored. Composite FK binds the token to the customer and the specific decision. |
+| Append-only | `forbid_mutation()` triggers (UPDATE, DELETE, TRUNCATE) on `audit_log`, `decisions`, `decision_policies`, `refunds` |
+| No overlapping policy versions | `EXCLUDE USING gist (policy_type WITH =, validity WITH &&)` on `policy_documents`. **`btree_gist` is installed solely for this constraint**: it lets a gist index combine the equality on `policy_type` with the range-overlap operator. |
+| Money | `bigint` everywhere, `CHECK >= 0`; `paid = list - discount + shipping` is a CHECK; a test asserts every `*_cents` column is `bigint` and no float/numeric column exists |
+| Decision before action | `actions.decision_id NOT NULL` + composite FK; an `actions` trigger requires the decision to be `allowed`/`allowed_with_conditions` and the action type and amount to equal the decision's. Decisions are immutable and store `input_state`, `reason_codes`, `rule_set_version`, and (via `decision_policies`) the policy versions applied. |
+| Paid-amount invariant | `CHECK (refunded_total_cents <= paid_cents)` on `orders` (`orders_refund_within_paid`); `refunds` INSERT trigger is the only maintainer of the running total, so a refund row cannot exist without the check running. Not a policy rule. |
+| Ownership | see 2.2 |
 
-The `vector(384)` dimension follows from bge-small-en-v1.5 / all-MiniLM-L6-v2 (both 384). Changing models means a migration and a re-embed, and `embedding_model` is checked at startup against configuration.
+Single action status flow is `pending` to `succeeded|failed` only; a final action cannot change.
+
+### 2.2 Ownership (customer_id on the row)
+- Every customer-scoped table carries `customer_id NOT NULL`. Child tables reference the parent by a **composite foreign key `(parent_id, customer_id)`**, so a child row cannot name a different customer than its parent (tested: `order_items_owner_fk`, `actions_decision_owner_fk`).
+- **Where the filter is applied:** the application layer, in the repository functions, which take a `CustomerContext` built from the authenticated session and add `WHERE customer_id = :ctx_customer` to every customer-scoped query (never from model output). Not-found and not-yours return the same 404.
+- **How a missing filter is caught:** (1) a schema test fails if any customer-scoped table lacks `customer_id NOT NULL`; (2) cross-customer integration tests (adversarial family 1) run against every repository function and assert zero rows/404 for another customer's IDs; (3) writes cannot cross customers regardless, thanks to the composite FKs. **Not enforced by the database today:** a missing `WHERE` on a *read* would not be stopped by the database. Row-level security with a non-superuser app role would close that gap (proposed for M2 hardening; see the task report).
+
+### 2.3 Drift assertion
+`orders.refunded_total_cents` is denormalized. `v_refund_drift` recomputes `SUM(refunds.amount_cents)` per order; `assert_no_refund_drift()` (`app/db/invariants.py`) raises if any order differs. It runs in CI against seeded data and again after each evaluation suite run.
+
+### 2.4 Concurrency (adversarial family 5)
+The execute path takes `SELECT ... FROM orders WHERE id=$1 FOR UPDATE` before computing and writing, re-runs the rules on the locked row, and inserts the refund in the same transaction. `tests/db/test_concurrent_refunds.py` runs two real connections on two threads against Postgres, both attempting the same full refund: with the lock exactly one refunds and the other declines cleanly; with the lock deliberately skipped, the database still rejects the second via `orders_refund_within_paid`.
+
+### 2.5 Time
+Use `clock_timestamp()` where wall-clock matters for expiry. `now()` is frozen at transaction start, so a long execution transaction would otherwise never observe a token expiring (found by a failing test).
+
+### 2.6 Limits of database enforcement
+The table owner (and superusers) can drop triggers or disable them. The app should connect as a non-owner role in deployment; local development uses the compose superuser. Until that role exists, the append-only and invariant guarantees hold against application bugs, not against someone with owner credentials.
 
 ## 3. State machine
 
@@ -123,6 +131,7 @@ Llama Prompt Guard 2 is defense in depth and a **measurement layer**. It is neve
 - A positive detection annotates the trace and the handoff evidence and may raise a case to human review. It must not be the sole reason an action is blocked. A negative detection never relaxes any check.
 - It is an extra network call outside the 2-call budget. It has its own budget, and its cost and latency are reported separately. If free-tier quota becomes the binding constraint, it is the first thing to drop.
 - M3 reports its detection rate on adversarial families 2 and 3 as a separate metric, and separately demonstrates that the system holds on those same cases **with Prompt Guard disabled**. The disabled-run result is the one that matters.
+- **Placement by trust, not by time:** classify text by whether it is attacker-influenced and whether it changes. (1) Policy documents, static and authored by us: scan **once at ingestion** and store the verdict with the chunk (`policy_chunks.injection_verdict`); never per request. (2) The customer message in the current turn: scan **per request**. (3) Any customer-writable field that later gets retrieved (order notes, profile text): scan **at write time AND keep treating it as untrusted at read time**; a stored clean verdict is never a reason to trust it later. Batch where the API allows.
 - It sits behind the same provider interface and adapter layer (a `classify_injection` method), with a Fake implementation for CI.
 
 ### 4.1 Interface (`app/llm/base.py`)
@@ -167,7 +176,7 @@ Order matters: cache sits **outside** the limiter, so hits consume no quota. The
 2. **Injection resistance:** policy chunks and customer text are placed in delimited data blocks, labeled untrusted; model outputs can only select from enumerated intents/fields. Backend ignores any "permission" inferred from text. Messages are scanned for obvious injection patterns for logging/flagging only (detection is not the defense; the architecture is).
 3. **Idempotency:** client-supplied `Idempotency-Key` header on the execute endpoint plus the server-derived key in `actions`; repeat with same key returns the original result; same key with different payload returns 409. Unique constraints are the backstop.
 4. **Timeout handling:** the (simulated) payments/fulfillment API call is made with an idempotency key; on timeout the action stays `pending`, and a reconciliation step queries by key. Never reported as success until confirmed.
-5. **Policy applicability:** retrieval filters `policy_documents` by `effective_from <= reference_date < effective_to`, where reference_date is the order's purchase date (refund/shipping) or subscription start (cancellation). Rules in code carry the policy version they implement, and a test asserts code version matches the stored policy version.
+5. **Policy applicability:** two different date anchors, never conflated (full rules in section 16.1). The policy **version** is selected by the order's **purchase date** (`PurchaseDate`; subscription start for cancellation). The refund **window** that version specifies is then measured from the **delivery date, or the presumed-lost date** when there was no delivery (`WindowAnchorDate`). Retrieval filters `policy_documents` with `validity @> purchase_date`. Rules in code carry the policy version they implement, and a test asserts code version matches the stored policy version. The two anchors are distinct `NewType`s (`app/domain/types.py`), so swapping them is a mypy error.
 6. **Observability:** one `trace_id` per conversation; spans for retrieval, each LLM call, each tool call. Cost shown as **projected** using `PRICE_PER_1K_IN/OUT` config.
 
 ## 6. Repository layout (proposed)
@@ -240,11 +249,14 @@ Checked 2026-11-10 against PyPI JSON metadata (wheel filenames) and the Hugging 
 | Dependency | Version checked | aarch64 evidence | Notes |
 |---|---|---|---|
 | pydantic-core | 2.50.4 | `manylinux2014_aarch64` cp311/cp312 wheel, 2.1 MB | via FastAPI/pydantic |
-| psycopg-binary | 3.3.8 | `manylinux_2_28_aarch64` cp311/cp312 wheel, 6.9 MB | not yet added (task 3) |
+| psycopg-binary | 3.3.8 | `manylinux_2_28_aarch64` cp311/cp312 wheel, 6.9 MB | in use since task 3 |
 | tokenizers | 0.23.3 | `cp310-abi3-manylinux_2_17_aarch64` wheel, 3.5 MB | |
 | onnxruntime | 1.31.1 | cp311/cp312 `manylinux_2_28_aarch64` wheel, 21.4 MB | |
 | numpy | 2.5.4 | cp312 `manylinux_2_27_aarch64` wheel, 15.7 MB | Python is 3.12 everywhere (section 15), which resolves the earlier cp311 gap |
 | pgvector/pgvector image | `0.8.7-pg17` (digest `sha256:7d0a4146...ccb8`) | `docker buildx imagetools inspect` and the Docker Hub tag API both list `linux/amd64` and `linux/arm64`; the same holds for the 0.7.4 to 0.8.7 pg17 tags | multi-arch confirmed by manifest. Run locally on amd64 only: extension loaded, `<->` distance and tsvector queries worked |
+| sqlalchemy | 2.1.8 | `cp312 manylinux_2_28_aarch64` wheel, 4.7 MB (C extensions); pure-Python fallback exists | greenlet (async only) not installed |
+| alembic / mako | 1.20.1 / 1.4.3 | pure Python | |
+| markupsafe | 3.0.4 | `cp312 manylinux_2_28_aarch64` wheel | via mako |
 | python:3.12-slim-bookworm | base image | manifest lists `linux/amd64`, `linux/arm64/v8`, arm/v7 and others | |
 | ghcr.io/astral-sh/uv | 0.11.19 | manifest lists `linux/amd64` and `linux/arm64` | copied into the build stage only |
 | torch | 2.15.0 | cp311 `manylinux_2_28_aarch64` wheel, **484 MB** (x86_64: 539 MB); metadata lists `nvidia-*` Linux deps | heavy; needs CPU-only index, and verify CUDA packages are not pulled |

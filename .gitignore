@@ -222,3 +222,10 @@ __marimo__/
 # Local tooling
 .claude/
 .env
+
+# Private keys and credentials (never commit)
+*.key
+*.pem
+ssh-key-*
+id_rsa*
+id_ed25519*

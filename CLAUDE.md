@@ -66,6 +66,9 @@ All Docker images must build and run on `linux/arm64` (OCI Ampere A1). Flag any 
 ## Conventions
 
 - **Python 3.12 everywhere** (local via uv, Docker, CI). Do not split versions.
+- **Database enforces the guarantees** (unique idempotency index, conditional-UPDATE single-use tokens, append-only triggers, policy-validity exclusion constraint, `bigint` cents, decisions before actions). If a guarantee seems impractical to put in the database, say so rather than moving it silently into Python.
+- Policy version selection and window measurement use distinct types `PurchaseDate` and `WindowAnchorDate` (`app/domain/types.py`). Never pass plain `date`.
+- Use `clock_timestamp()`, not `now()`, for expiry checks inside long transactions.
 - **Prompt Guard is detection only.** It must never be the control that blocks an action, and a negative result never relaxes a check. Auth, deterministic rules, and the single-use confirmation token are the only defenses.
 - **Paid-amount invariant:** total refunds per order can never exceed the amount actually paid, enforced in code and at the database, independent of policy text.
 - Policy version comes from the purchase date; the refund window is measured from delivery or presumed-lost date. Never conflate the two anchors.

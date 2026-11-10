@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     environment: Literal["dev", "test", "prod"] = "dev"
-    database_url: str = "postgresql+psycopg://support:support@localhost:5432/support"
+    database_url: str = "postgresql+psycopg://support:support@127.0.0.1:5432/support"
 
     # Provider/model are selected by env only. Default is the offline fake.
     llm_provider: Literal["fake", "groq", "gemini"] = "fake"

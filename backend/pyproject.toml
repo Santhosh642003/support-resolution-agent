@@ -8,6 +8,9 @@ dependencies = [
     "uvicorn>=0.30",
     "pydantic>=2.8",
     "pydantic-settings>=2.4",
+    "sqlalchemy>=2.1.8",
+    "alembic>=1.20.1",
+    "psycopg[binary]>=3.3.8",
 ]
 
 [dependency-groups]
@@ -33,7 +36,8 @@ target-version = "py312"
 select = ["E", "F", "I", "B", "UP", "S"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]
+"tests/**" = ["S101", "E501"]
+"alembic/versions/*" = ["E501"]  # embedded SQL
 
 [tool.mypy]
 strict = true
