@@ -1,0 +1,73 @@
+# CLAUDE.md
+
+Guidance for anyone (human or AI) working in this repository. Read fully before making changes.
+
+## Project summary
+
+A customer-support resolution agent for a **fictional subscription-commerce company**. It is a portfolio project: correctness under hard conditions, measured evaluation, and honest documentation of failures matter more than feature count. **All data is synthetic and must be labeled as simulated** (in the UI, docs, seed data, and reports).
+
+The agent answers policy questions, reads live order and subscription data through APIs, and performs tightly controlled actions. Version 1 has exactly three workflows:
+
+1. Order-status lookup
+2. Subscription cancellation
+3. Refund requests
+
+Example request: "My replacement order hasn't arrived, cancel my subscription and refund the missing shipment." The system must: authenticate the customer; retrieve the applicable shipping, refund, and cancellation policies; fetch current order and subscription records via APIs; decide permitted actions with explicit business rules in code; present proposed changes for customer confirmation; execute permitted actions exactly once even under retries; return a receipt or hand off to a human with the evidence gathered.
+
+Full design: `docs/SPEC.md`.
+
+## Non-negotiable design rules
+
+- **Deterministic action checks.** Code decides eligibility and amounts. The model only explains decisions.
+- **Server-side authorization.** Customer identity comes from the authenticated session. The model can never supply or choose a customer ID.
+- **Idempotency.** Repeated or retried requests cannot produce duplicate refunds or cancellations.
+- **Live data.** Order and subscription state comes from the API at request time, never from embeddings.
+- **Policy versioning.** Policies have effective dates and versions; the applicable policy can depend on purchase date. Answers cite the policy text used.
+- **Failure honesty.** API timeouts produce an explicit pending or failed state, never a claimed success.
+- **Injection resistance.** Retrieved documents and customer messages cannot grant permissions or override backend rules.
+- **Human handoff.** Unresolved cases carry the relevant evidence and the actions attempted.
+- **Bounded workflow.** An explicit state machine with a capped number of tool calls.
+
+Release bar: **zero unauthorized writes and zero duplicate refunds** in the defined test suite.
+
+## Stack
+
+- Backend: Python, FastAPI, typed request/response schemas
+- Data: PostgreSQL (customers, orders, subscriptions, actions, audit records)
+- Retrieval: PostgreSQL full-text search + pgvector with rank fusion; reranker optional later
+- Frontend: React chat, confirmation panel, customer account view, handoff queue
+- Infra: Docker, database migrations, GitHub Actions CI, one cloud deployment later (OCI Always Free, Ampere A1 / arm64)
+- Observability: retrieval results, tool calls, failures, token usage, latency, cost per case
+
+## Out of scope for V1
+
+Voice, mobile, fine-tuning, graph databases, multiple agents, extra connectors, and any workflow beyond the three above.
+
+## Standing constraints
+
+### Model access: free tier only
+No paid API access. This is a hard constraint, and the architecture must keep it invisible to the rest of the codebase.
+
+- **Provider abstraction.** One internal interface for chat completion and structured output. Adapters: `GroqAdapter` (primary, OpenAI-compatible, `base_url` swap), `GeminiAdapter` (secondary), `FakeAdapter` (deterministic, no network). Provider and model are selected by environment variable.
+- **No vendor SDK outside the adapter layer.** No module outside `app/llm/adapters/` may import a vendor SDK or reference a model name. Enforce with a test/lint check.
+- **Rate limiting is a first-class feature.** Token-bucket limiter, bounded exponential backoff with jitter, capped retries, and a clearly surfaced daily-quota-exhausted error. Quota failures map to the workflow's pending/failed path, never a fabricated success.
+- **Response cache** in PostgreSQL keyed by hash of (provider, model, full prompt, temperature, tool schema version). Eval runs replay from cache at zero calls with identical results. Cache hits/misses appear in the trace; eval reports include cache-hit rate.
+- **Cost accounting** still applies: tokens per case, latency split into model time vs tool time, configurable price-per-token. Label cost figures **projected, not incurred**.
+
+### No network in CI
+All unit tests, all CI runs, and all business-rule tests pass with zero network calls using `FakeAdapter`. CI must never require an API key. Tests that need the network are marked and excluded from CI.
+
+### Local embeddings
+sentence-transformers on CPU (e.g. `bge-small-en-v1.5` or `all-MiniLM-L6-v2`). No embedding API. Pin model name and revision; store the embedding model identifier alongside every stored vector so a model change is detectable, not silent; record the resulting pgvector dimension.
+
+### arm64 build constraint
+All Docker images must build and run on `linux/arm64` (OCI Ampere A1). Flag any dependency that is x86-only or lacks Arm wheels as soon as it is noticed. Assume a small instance; keep memory modest; no GPU.
+
+## Conventions
+
+- Small commits; tests alongside the code they cover.
+- Never commit secrets. `.env` is git-ignored; provide `.env.example` with placeholder values only.
+- **Ask before adding a dependency or expanding scope.**
+- Typed schemas at every API boundary; business rules are pure functions with unit tests.
+- Commit messages and pull request descriptions contain **no attribution trailers of any kind**. Never add `Co-Authored-By`, `Claude-Session`, or "Generated with Claude Code" lines. Subject and body only.
+- Do not push unless the project owner says so.
