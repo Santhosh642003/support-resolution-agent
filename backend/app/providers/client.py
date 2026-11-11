@@ -35,6 +35,7 @@ from app.providers.base import (
     LLMResponse,
     NativeJson,
     OutputTruncated,
+    ProviderRejected,
     ProviderTimeout,
     ProviderUnavailable,
     QuotaExhausted,
@@ -43,6 +44,7 @@ from app.providers.base import (
 )
 from app.providers.cache import CacheMode, LLMCache
 from app.providers.ratelimit import DailyQuota, RateLimiter, RetryPolicy, estimate_tokens
+from app.providers.redact import redact
 from app.providers.structured import (
     parse_and_validate,
     repair_request,
@@ -60,6 +62,7 @@ class _Stats:
     model_s: float = 0.0
     adapter_calls: int = 0
     transport: int = 0
+    native_fallbacks: int = 0
 
 
 class CallBudget:
@@ -215,6 +218,8 @@ class LLMClient:
                     cache=cache_status,
                     outcome="error",
                     error_kind=type(exc).__name__,
+                    error_detail=redact(exc.detail or str(exc))[:2000],
+                    native_fallbacks=state.native_fallbacks,
                     adapter_calls=state.adapter_calls,
                     transport_attempts=state.transport,
                     model_ms=state.model_s * 1000,
@@ -239,7 +244,25 @@ class LLMClient:
                 budget.consume()
             attempts += 1
             state.adapter_calls += 1
-            resp = self._dispatch(current, state)
+            try:
+                resp = self._dispatch(current, state)
+            except ProviderRejected as exc:
+                # Native JSON mode is an OPTIMIZATION, never a dependency. If the provider
+                # rejects (HTTP 400) a request that carried the native hint, retry ONCE without
+                # it through our own contract. The call is counted, never silent.
+                if (
+                    exc.status != 400
+                    or current.native_json == "none"
+                    or state.native_fallbacks >= 1
+                ):
+                    raise
+                state.native_fallbacks += 1
+                log.warning(
+                    "native JSON hint rejected (400); retrying once without it. provider said: %s",
+                    exc.detail or exc,
+                )
+                current = current.model_copy(update={"native_json": "none", "native_schema": None})
+                resp = self._dispatch(current, state)
             if schema is None:
                 return resp, None, attempts
             parsed, err = parse_and_validate(resp.text, schema)
@@ -330,6 +353,7 @@ class LLMClient:
             outcome="ok",
             adapter_calls=state.adapter_calls,
             transport_attempts=state.transport,
+            native_fallbacks=state.native_fallbacks,
             prompt_tokens=resp.usage.prompt_tokens,
             completion_tokens=resp.usage.completion_tokens,
             model_ms=state.model_s * 1000,
@@ -349,8 +373,10 @@ class LLMClient:
                     text(
                         "INSERT INTO llm_calls (trace_id, scenario_id, provider, model,"
                         " cache_status, outcome, error_kind, adapter_calls, transport_attempts,"
-                        " prompt_tokens, completion_tokens, model_ms, total_ms)"
-                        " VALUES (:t, :s, :p, :m, :c, :o, :e, :a, :ta, :pt, :ct, :mm, :tm)"
+                        " prompt_tokens, completion_tokens, model_ms, total_ms, error_detail,"
+                        " native_fallbacks)"
+                        " VALUES (:t, :s, :p, :m, :c, :o, :e, :a, :ta, :pt, :ct, :mm, :tm,"
+                        " :ed, :nf)"
                     ),
                     {
                         "t": trace.trace_id,
@@ -366,6 +392,8 @@ class LLMClient:
                         "ct": trace.completion_tokens,
                         "mm": round(trace.model_ms),
                         "tm": round(trace.total_ms),
+                        "ed": trace.error_detail,
+                        "nf": trace.native_fallbacks,
                     },
                 )
         except SQLAlchemyError:  # a failed trace write must not change the call's outcome

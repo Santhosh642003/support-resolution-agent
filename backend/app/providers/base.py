@@ -90,6 +90,10 @@ class CallTrace(_Frozen):
     model_ms: float = 0.0  # time inside the provider (all attempts, excluding backoff sleeps)
     total_ms: float = 0.0
     scenario_id: str | None = None
+    # Provider error body (redacted, truncated) when the call failed.
+    error_detail: str | None = None
+    # Times the native JSON hint was rejected and the call was retried once without it.
+    native_fallbacks: int = 0
 
 
 class LLMResponse(_Frozen):
@@ -113,7 +117,12 @@ class AdapterCapabilities(_Frozen):
 
 
 class LLMError(Exception):
-    """Base class. Carries no response; a caller that catches it has NO model output."""
+    """Base class. Carries no response; a caller that catches it has NO model output.
+
+    `detail` is the provider's error body, REDACTED (no keys, no organisation ids), when one was
+    received. It is always captured so a failure is diagnosable the first time it happens."""
+
+    detail: str | None = None
 
 
 class RateLimited(LLMError):

@@ -4,6 +4,7 @@ This module and its siblings are the only place a model name may appear. The API
 only in the request headers; it is never logged and never part of repr().
 """
 
+import logging
 import re
 import time
 from collections.abc import Callable
@@ -13,6 +14,7 @@ import httpx
 
 from app.providers.base import (
     AdapterCapabilities,
+    LLMError,
     LLMRequest,
     LLMResponse,
     ProviderRejected,
@@ -24,6 +26,9 @@ from app.providers.base import (
     ToolCall,
     Usage,
 )
+from app.providers.redact import redact
+
+log = logging.getLogger(__name__)
 
 DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
 DEFAULT_MODEL = "openai/gpt-oss-120b"  # a default only; LLM_MODEL overrides it
@@ -38,13 +43,15 @@ _DAILY = re.compile(r"per day|\((?:rpd|tpd)\)", re.IGNORECASE)
 
 
 def _message_of(resp: httpx.Response) -> str:
+    """The provider's error message, REDACTED: it is placed in exception text, which reaches logs
+    and the llm_calls table, and provider messages name the organisation."""
     try:
         body = resp.json()
         err = body.get("error", body) if isinstance(body, dict) else body
         msg = err.get("message") if isinstance(err, dict) else None
-        return str(msg if msg else body)[:500]
+        return redact(str(msg if msg else body)[:500])
     except ValueError:
-        return resp.text[:500]
+        return redact(resp.text[:500])
 
 
 def _retry_after_s(resp: httpx.Response, message: str) -> float | None:
@@ -76,6 +83,7 @@ class GroqAdapter:
     ) -> None:
         self.model = model or DEFAULT_MODEL
         self._base_url = base_url.rstrip("/")
+        self._api_key = api_key
         self._headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         self._client = client or httpx.Client(timeout=timeout_s)
         self._on_response = on_response  # observability hook (smoke test): sees headers
@@ -139,15 +147,28 @@ class GroqAdapter:
         if status == 200:
             return self._parse_ok(resp, elapsed_ms)
         message = _message_of(resp)
+        # ALWAYS capture the full error body (redacted). An unexplained provider 400 that was not
+        # logged is undiagnosable; this costs nothing.
+        body = redact(resp.text[:4000], self._api_key)
+        log.warning("%s error response %s: %s", self.name, status, body)
+        err: LLMError
         if status == 429:
             if _DAILY.search(message):
-                raise QuotaExhausted(f"{self.name} daily quota exhausted: {message}")
-            raise RateLimited(message, retry_after_s=_retry_after_s(resp, message), scope="minute")
-        if status == 413:
-            raise RequestTooLarge(message)
-        if status >= 500:
-            raise ProviderUnavailable(f"{self.name} returned {status}: {message}")
-        raise ProviderRejected(f"{self.name} rejected the request ({status}): {message}", status)
+                err = QuotaExhausted(f"{self.name} daily quota exhausted: {message}")
+            else:
+                err = RateLimited(
+                    message, retry_after_s=_retry_after_s(resp, message), scope="minute"
+                )
+        elif status == 413:
+            err = RequestTooLarge(message)
+        elif status >= 500:
+            err = ProviderUnavailable(f"{self.name} returned {status}: {message}")
+        else:
+            err = ProviderRejected(
+                f"{self.name} rejected the request ({status}): {message}", status
+            )
+        err.detail = body
+        raise err
 
     def _parse_ok(self, resp: httpx.Response, elapsed_ms: float) -> LLMResponse:
         try:
