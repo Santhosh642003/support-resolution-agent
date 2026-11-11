@@ -174,6 +174,16 @@ def seed_all(conn: Connection) -> SeedReport:
             },
         )
     for p in PRODUCTS:
+        # One-time backfill of the column added in migration 0009: rows seeded before it carry the
+        # migration default 'general'. Only that default is ever overwritten; a stored category that
+        # differs from the definition in any other way is still reported as drift by ensure().
+        conn.execute(
+            text(
+                "UPDATE products SET category = :c WHERE id = :i AND category = 'general'"
+                " AND :c <> 'general'"
+            ),
+            {"c": p.category, "i": ids.product_id(p.sku)},
+        )
         s.ensure(
             "products",
             {
@@ -182,6 +192,7 @@ def seed_all(conn: Connection) -> SeedReport:
                 "name": p.name,
                 "price_cents": p.price_cents,
                 "is_digital_addon": p.is_digital_addon,
+                "category": p.category,
             },
         )
     for sub in SUBSCRIPTIONS:

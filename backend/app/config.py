@@ -43,14 +43,21 @@ class Settings(BaseSettings):
     # yields an EMPTY reply (finish_reason 'length'), which is treated as a failure.
     llm_explanation_max_tokens: int = 1500
     # Hybrid retrieval (app/retrieval/hybrid.py). Configuration, not constants in the code.
-    # retrieval_k=7 is the UNCHANGED default: on the expanded corpus no k up to 10 met the
-    # pre-registered selection rule (SPEC 7.2), so it is not an evidence-chosen value. The
-    # full-text weight stays at 1.0 pending a PM decision (vector-only measured better, SPEC 7.2).
+    # retrieval_k=7: the smallest k meeting the pre-registered rule R3 for the system R2 selected
+    # (SPEC 7.3). Fusion weights stay at equal (1.0, 1.0): R2's tie-break chose vector-only on a
+    # saturated comparison; that outcome is reported, not applied, pending a PM decision (SPEC 7.3).
     # candidates >= k so each leg can supply a full top-k; the RRF constant is an untuned default.
     retrieval_k: int = 7
     retrieval_candidates: int = 20
     retrieval_rrf_k: int = 60
     retrieval_weight_fts: float = 1.0
+    # Full-text leg configuration B (SPEC 7.3): AND matches first then OR fill, ts_rank_cd, title
+    # weighted. Chosen on the selection set by the pre-registered rule R1 (13/16 against 5/16 for
+    # the original OR / ts_rank leg). The ORIGINAL leg stays available as BASELINE_LEXICAL for
+    # reproducing earlier numbers.
+    retrieval_fts_form: Literal["or", "and", "and_then_or"] = "and_then_or"
+    retrieval_fts_rank: Literal["rank", "rank_cd"] = "rank_cd"
+    retrieval_fts_title_weight: bool = True
     retrieval_weight_vec: float = 1.0
     # PROJECTED cost per 1k tokens (a paid-tier estimate, never incurred cost).
     llm_price_per_1k_in: float = 0.0

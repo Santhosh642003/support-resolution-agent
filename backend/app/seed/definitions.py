@@ -43,6 +43,7 @@ class ProductDef:
     name: str
     price_cents: int
     is_digital_addon: bool = False
+    category: str = "general"  # structured fact used to scope retrieval
 
 
 @dataclass(frozen=True)
@@ -133,10 +134,17 @@ PRODUCTS: tuple[ProductDef, ...] = (
     ProductDef("SIM-BOX-CLASSIC", "SIMULATED Classic Snack Box", 3000),
     ProductDef("SIM-BOX-FAMILY", "SIMULATED Family Snack Box", 4800),
     ProductDef("SIM-BOX-DELUXE", "SIMULATED Deluxe Snack Box", 5000),
-    ProductDef("SIM-ADDON-RECIPES", "SIMULATED Digital Recipe Library (add-on)", 1500, True),
+    ProductDef(
+        "SIM-ADDON-RECIPES",
+        "SIMULATED Digital Recipe Library (add-on)",
+        1500,
+        True,
+        "digital_addon",
+    ),
     ProductDef("SIM-CLEARANCE-MUG", "SIMULATED Clearance Mug (final sale)", 2000),
-    ProductDef("SIM-PLAN-MONTHLY", "SIMULATED Monthly Plan", 1500),
-    ProductDef("SIM-PLAN-ANNUAL", "SIMULATED Annual Plan", 12000),
+    ProductDef("SIM-PLAN-MONTHLY", "SIMULATED Monthly Plan", 1500, category="plan"),
+    ProductDef("SIM-GIFTCARD-50", "SIMULATED Gift Card (50.00)", 5000, category="gift_card"),
+    ProductDef("SIM-PLAN-ANNUAL", "SIMULATED Annual Plan", 12000, category="plan"),
 )
 
 # --- subscriptions -----------------------------------------------------------------------
@@ -477,6 +485,17 @@ ORDERS: tuple[OrderDef, ...] = (
             ),
         ),
     ),
+    # Supplementary. v2 (2026-03-18). A SIMULATED gift card purchase: the only seeded order whose
+    # structured facts put the gift card policy in retrieval scope (SPEC 7.3). Digital: no shipment.
+    OrderDef(
+        key="gift_card_purchase",
+        order_number="SIM-3002",
+        customer="carol",
+        placed_at=at(2026, 3, 18),
+        status="delivered",
+        list_total_cents=5000,
+        items=(ItemDef("SIM-GIFTCARD-50", 1, 5000, 5000),),
+    ),
     # First-charge orders for each subscription.
     _charge_order("SIM-S-0001", _SUB["annual_v1_inside_proration_window"], "SIM-PLAN-ANNUAL"),
     _charge_order("SIM-S-0002", _SUB["monthly_v2_inside_cooling_off"], "SIM-PLAN-MONTHLY"),
@@ -543,6 +562,9 @@ CASES: tuple[SeedCase, ...] = (
         "v1 order delivered after the cutover; outside 30 days, inside 45",
     ),
     SeedCase("replacement_in_transit", "order", None, "the replacement for case 5"),
+    SeedCase(
+        "gift_card_purchase", "order", None, "a gift card purchase: gift card policy in scope"
+    ),
     SeedCase("in_transit_on_schedule", "order", None, "order-status lookup, on schedule"),
     SeedCase(
         "v2_delivery_exception_before_presumed_lost",

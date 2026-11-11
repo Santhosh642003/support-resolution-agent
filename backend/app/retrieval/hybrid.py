@@ -31,6 +31,7 @@ additional to `k`.
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
+from typing import Literal
 
 from sqlalchemy import Connection, text
 
@@ -100,6 +101,38 @@ def retrieval_scope_for(intents: Sequence[str], *, delivery_issue: bool = False)
 
 
 @dataclass(frozen=True)
+class LexicalConfig:
+    """How the full-text leg builds its query and ranks.
+
+    form: 'or' ORs the terms (the original behaviour); 'and' is websearch_to_tsquery (every term
+    must match); 'and_then_or' takes the AND matches first and fills the rest from the OR matches.
+    rank: 'rank' is ts_rank; 'rank_cd' is ts_rank_cd (cover density, which rewards terms close
+    together). title_weight: rank the document title (weight A) above body text (weight B); the
+    title is joined in at query time (a stored column would replace this at scale).
+    Numeric tokens ('7500', '45') survive the 'english' configuration (verified in SPEC 7.3).
+    """
+
+    form: Literal["or", "and", "and_then_or"] = "or"
+    rank: Literal["rank", "rank_cd"] = "rank"
+    title_weight: bool = False
+
+
+# The original, untuned full-text leg. Kept as the default argument so every earlier measurement
+# stays reproducible; production uses the configuration in Settings.
+BASELINE_LEXICAL = LexicalConfig("or", "rank", False)
+
+
+@dataclass(frozen=True)
+class ScopeRecord:
+    """Why each candidate policy type is in or out of scope, recorded in the retrieval trace so a
+    missing clause can be attributed to SCOPING rather than to ranking."""
+
+    types: tuple[str, ...]
+    included: dict[str, str] = field(default_factory=dict)  # policy type -> reason
+    excluded: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class ScopeFilters:
     """Metadata filters applied inside each leg, beside the date filter. Both default ON: a
     seller-facing policy does not apply to customers, and an archived document is superseded.
@@ -119,6 +152,7 @@ class HybridConfig:
     rrf_k: int  # RRF constant: score = w / (rrf_k + rank)
     weight_fts: float
     weight_vec: float
+    lexical: LexicalConfig = BASELINE_LEXICAL
 
     @classmethod
     def from_settings(cls, s: Settings) -> "HybridConfig":
@@ -128,6 +162,9 @@ class HybridConfig:
             rrf_k=s.retrieval_rrf_k,
             weight_fts=s.retrieval_weight_fts,
             weight_vec=s.retrieval_weight_vec,
+            lexical=LexicalConfig(
+                s.retrieval_fts_form, s.retrieval_fts_rank, s.retrieval_fts_title_weight
+            ),
         )
 
 
@@ -169,6 +206,7 @@ class RetrievalTrace:
     eligible: int  # chunks in scope for this purchase date and policy types
     fts: tuple[str, ...] = ()
     vec: tuple[str, ...] = ()
+    scope: ScopeRecord | None = None  # why each policy type was in or out of scope
 
 
 @dataclass(frozen=True)
@@ -218,6 +256,39 @@ def _clause(r: object) -> PolicyClause:
     )
 
 
+def _fts_once(
+    conn: Connection,
+    query: str,
+    d: PurchaseDate,
+    types: Sequence[str],
+    n: int,
+    filters: ScopeFilters,
+    form: str,
+    lexical: LexicalConfig,
+) -> list[PolicyClause]:
+    tsq = (
+        "replace(plainto_tsquery('english', :q)::text, '&', '|')::tsquery"
+        if form == "or"
+        else "websearch_to_tsquery('english', :q)"
+    )
+    vec = (
+        "(setweight(to_tsvector('english', d.title), 'A') || setweight(c.tsv, 'B'))"
+        if lexical.title_weight
+        else "c.tsv"
+    )
+    rank = f"ts_rank_cd({vec}, q.tsq)" if lexical.rank == "rank_cd" else f"ts_rank({vec}, q.tsq)"
+    rows = conn.execute(
+        text(
+            f"WITH q AS (SELECT {tsq} AS tsq)"  # noqa: S608 (constants only, no input)
+            f" SELECT {_COLUMNS} FROM {_FROM}, q"
+            f" WHERE {_scope(filters)} AND {vec} @@ q.tsq"
+            f" ORDER BY {rank} DESC, c.chunk_key LIMIT :n"
+        ),
+        {"q": query, "d": d, "types": list(types), "n": n},
+    )
+    return [_clause(r) for r in rows]
+
+
 def fts_leg(
     conn: Connection,
     query: str,
@@ -225,19 +296,20 @@ def fts_leg(
     types: Sequence[str],
     n: int,
     filters: ScopeFilters = DEFAULT_FILTERS,
+    lexical: LexicalConfig = BASELINE_LEXICAL,
 ) -> list[PolicyClause]:
-    """Full-text leg, date-filtered. Terms are OR-ed: a natural-language message must not need
-    every one of its words to appear in a clause (websearch/plain semantics are AND)."""
-    rows = conn.execute(
-        text(
-            "WITH q AS (SELECT replace(plainto_tsquery('english', :q)::text, '&', '|')::tsquery"  # noqa: S608
-            f" AS tsq) SELECT {_COLUMNS} FROM {_FROM}, q"  # (constants only, no input)
-            f" WHERE {_scope(filters)} AND c.tsv @@ q.tsq"
-            " ORDER BY ts_rank(c.tsv, q.tsq) DESC, c.chunk_key LIMIT :n"
-        ),
-        {"q": query, "d": d, "types": list(types), "n": n},
-    )
-    return [_clause(r) for r in rows]
+    """Full-text leg, date-filtered (the date filter is in the WHERE clause of every form).
+
+    The default `lexical` is the original untuned leg (OR-ed terms, ts_rank) so earlier numbers
+    reproduce; production passes the configuration from Settings."""
+    if lexical.form != "and_then_or":
+        return _fts_once(conn, query, d, types, n, filters, lexical.form, lexical)
+    strict = _fts_once(conn, query, d, types, n, filters, "and", lexical)
+    if len(strict) >= n:
+        return strict
+    seen = {c.chunk_key for c in strict}
+    loose = _fts_once(conn, query, d, types, n, filters, "or", lexical)
+    return strict + [c for c in loose if c.chunk_key not in seen][: n - len(strict)]
 
 
 def vector_leg(
@@ -344,6 +416,7 @@ def retrieve(
     filters: ScopeFilters = DEFAULT_FILTERS,
     *,
     follow: bool = True,
+    scope: ScopeRecord | None = None,
 ) -> RetrievalResult:
     """Date-filtered hybrid retrieval. Returns at most cfg.k DIRECT clauses of the versions in
     effect on `purchase_date`, never from another version; plus, if `follow`, the earlier-version
@@ -354,7 +427,9 @@ def retrieve(
         text(f"SELECT count(*) FROM {_FROM} WHERE {_scope(filters)}"),  # noqa: S608
         {"d": purchase_date, "types": list(policy_types)},
     ).scalar_one()
-    fts = fts_leg(conn, query, purchase_date, policy_types, cfg.candidates_per_leg, filters)
+    fts = fts_leg(
+        conn, query, purchase_date, policy_types, cfg.candidates_per_leg, filters, cfg.lexical
+    )
     qvec = embedder.embed([query])[0]  # no query-instruction prefix (SPEC 14)
     vec = vector_leg(conn, qvec, purchase_date, policy_types, cfg.candidates_per_leg, filters)
     direct = fuse(fts, vec, cfg)
@@ -368,5 +443,6 @@ def retrieve(
             int(eligible),
             tuple(c.chunk_key for c in fts),
             tuple(c.chunk_key for c in vec),
+            scope,
         ),
     )

@@ -77,6 +77,18 @@ def items_of(
     )
 
 
+def categories_of_order(conn: Connection, ctx: CustomerContext, order_id: UUID) -> set[str]:
+    """Product categories present on one of THIS customer's orders (a structured scoping fact)."""
+    rows = conn.execute(
+        text(
+            "SELECT DISTINCT p.category FROM order_items i JOIN products p ON p.id = i.product_id"
+            " WHERE i.customer_id = :c AND i.order_id = :o"
+        ),
+        {"c": ctx.customer_id, "o": order_id},
+    )
+    return {r.category for r in rows}
+
+
 def shipment_of(
     conn: Connection, ctx: CustomerContext, order_id: UUID
 ) -> Row[tuple[object, ...]] | None:
