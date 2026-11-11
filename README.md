@@ -10,6 +10,8 @@ docker compose up -d --build     # Postgres 17 + pgvector, and the backend on :8
 curl localhost:8000/health
 ```
 
+Seed the synthetic dataset (idempotent, deterministic; after `alembic upgrade head`): `cd backend && uv run python -m app.seed`.
+
 Backend development: `cd backend && uv sync && uv run pytest`. Python 3.12 is provisioned by uv.
 
 `uv sync` needs the network once after the uv cache has been cleared (for example after reclaiming disk space), because the project is built with `hatchling`, which is fetched from the package index. `uv run --offline` fails with "hatchling was not found in the cache" until a networked `uv sync` has repopulated it.

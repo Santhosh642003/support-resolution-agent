@@ -75,8 +75,13 @@ Single action status flow is `pending` to `succeeded|failed` only; a final actio
 ### 2.4 Concurrency (adversarial family 5)
 The execute path takes `SELECT ... FROM orders WHERE id=$1 FOR UPDATE` before computing and writing, re-runs the rules on the locked row, and inserts the refund header and its lines in the same transaction. `tests/db/test_concurrent_refunds.py` runs two real connections on two threads against Postgres, both attempting the same full refund: with the lock exactly one refunds and the other declines cleanly; with the lock deliberately skipped, the database still rejects the second via `orders_refund_within_paid`.
 
-### 2.5 Time
-Use `clock_timestamp()` where wall-clock matters for expiry. `now()` is frozen at transaction start, so a long execution transaction would otherwise never observe a token expiring (found by a failing test).
+### 2.5 Time: two clocks, deliberately not unified
+- **Database wall clock (`clock_timestamp()`), for confirmation-token expiry.** Expiry operates on a timescale of minutes within a single request. `now()` is frozen at transaction start, so a long execution transaction would otherwise never observe a token expiring (found by a failing test, FAILURE_ANALYSIS F-001). This stays on the real clock. Pinning it would make an expired token look valid.
+- **Injected `Clock` (`app/clock.py`), for all business date logic.** Policy windows are measured in days (30 and 45 day refund windows, 60 day proration, 14 day cooling-off, 10 business day presumed-lost). `Clock` is a protocol with `today()` and `now()`; `SystemClock` is production, `FixedClock` is for tests and evaluation. `SIMULATED_TODAY = 2026-04-15` is the one named constant for the simulated current date, after the 2026-03-01 cutover.
+  - **Why:** seed data uses absolute dates. If the system read the real clock, every window would silently expire as real time passed and the test suite would rot. If seed dates were computed relative to the real clock instead, the evaluation suite would stop being reproducible, which would break M3. So tests and the evaluation runner pin the clock to `SIMULATED_TODAY`, and a test that depends on the real date is a bug.
+  - **Enforcement:** `backend/tests/unit/test_no_direct_clock.py` fails if any module under `app/` (other than `app/clock.py` itself) or `tests/` calls or references `date.today`, `datetime.now` or `datetime.utcnow`, including through aliases and `default_factory=datetime.now`. It is static, so it does not see `getattr` tricks, `datetime.fromtimestamp(time.time())` or SQL `CURRENT_DATE`.
+  - **Do not unify the two clocks.** A future reader tempted to route token expiry through the injected clock, or the business rules through the database clock, would break one of the two guarantees above.
+  - **Consequence of the pinned date:** because the earliest possible v2 delivery is the cutover day and cutover plus 45 days is after 2026-04-15, no seeded v2 order can be outside its 45-day window. Window *expiry* under v2 is exercised by advancing the clock (`FixedClock.plus_days`) in rule tests, not by seed data.
 
 ### 2.6 Policy chunk identity (migration 0004)
 Clause-level chunks carry a stable, human-meaningful identity and the date filter needs no join.
@@ -208,6 +213,8 @@ Order matters: cache sits **outside** the limiter, so hits consume no quota. The
 │   ├── app/
 │   │   ├── main.py
 │   │   ├── config.py
+│   │   ├── clock.py         Clock protocol, SystemClock, FixedClock, SIMULATED_TODAY
+│   │   ├── seed/            deterministic synthetic data (definitions, ids, idempotent loader)
 │   │   ├── api/             routers: auth, chat, orders, subscriptions, proposals, handoffs
 │   │   ├── auth/            sessions, current_customer dependency
 │   │   ├── domain/          models, rules/ (refund, cancel, shipping), money
@@ -216,7 +223,6 @@ Order matters: cache sits **outside** the limiter, so hits consume no quota. The
 │   │   ├── retrieval/       chunking, embedder, fts, vector, fusion, citations
 │   │   ├── observability/   tracing, cost
 │   │   └── db/              session, repositories
-│   ├── seed/                synthetic data generator (deterministic seed)
 │   └── tests/               unit/, integration/, fixtures/llm/
 ├── frontend/                React app (chat, confirmation panel, account, handoff queue)
 ├── eval/                    dev set, held-out set (locked), adversarial, runner, reports
@@ -383,6 +389,30 @@ At least one of each (eight cases):
 8. an annual subscription under v2 cancelled on day 10 after the first charge, where both cooling-off and proration could fire (a test asserts cooling-off wins and fails if the evaluation order is reversed)
 
 Seed tests assert each case exists. The interpretation points raised earlier are resolved in section 16.
+
+### 13.2 Implemented seed (`app/seed/`, task 5)
+
+Three customers (Alex, Blair, Carol; all labeled SIMULATED), 8 products, 5 subscriptions, 14 orders (5 are first-charge orders of the subscriptions), 22 order items, 9 shipments, 23 shipment events. Every date is an absolute literal in `app/seed/definitions.py`; there is no randomness; row ids are `uuid5(namespace, kind:key)`, so a test names a case by key and needs no database lookup. `python -m app.seed` is idempotent (a second run inserts nothing, verified by comparing every column of all seven tables, event ids included, and again on a second freshly migrated database), fails if a stored row differs from its definition, and ends with `assert_no_refund_drift()` in the same transaction. Seeded statuses are treated as live state and are not compared on re-seed. No refunds, decisions or actions are seeded: those records must come from the rules engine, and inventing them would plant fabricated audit history.
+
+Positions relative to `SIMULATED_TODAY` (2026-04-15). "Day N" is calendar days since the window anchor (delivery, or presumed-lost date) for orders and since the first charge for subscriptions. Version is chosen by purchase date (orders) or start date (subscriptions).
+
+| # | Key | Where | Version | Position at 2026-04-15 |
+|---|---|---|---|---|
+| 1 | `refund_v1_above_ceiling_human_review` | SIM-1001 Alex | v1 (purchase 02-26) | delivered 03-18, day 28 of 30: inside, 2 days left. Refundable 9800 is above the 7500 v1 ceiling and below the 12000 v2 ceiling: human review. Anchor is after the cutover while the version is v1. |
+| 2 | `promo_discount_paid_differs_from_list` | SIM-1002 Alex | v2 | delivered 03-27, day 19 of 45: inside. List 8000, discount 2000, shipping 500, paid 6500; refundable lines 6000. |
+| 3 | `digital_addon_accessed_with_refundable_items` | SIM-1003 Alex | v2 | delivered 03-31, day 15 of 45: inside. Add-on (1500) accessed 03-30; refundable 8000 of 9500. |
+| 4 | `final_sale_item_in_order` | SIM-1004 Alex | v2 | delivered 04-03, day 12 of 45: inside. Final-sale mug (2000) excluded; refundable 3000 of 5500. |
+| 5 | `lost_shipment_with_replacement_sent` | SIM-2001 Blair | v2 | undelivered; presumed lost 03-25 (10 business days after ship 03-11), day 21 of 45: inside. Replacement `replacement_in_transit` (SIM-2002, paid 0) placed 04-03 after the loss, shipped 04-06, expected 04-15, presumed lost 04-20 (its own window): in transit. |
+| 6 | `annual_v1_inside_proration_window` | Blair | v1 (start 02-20) | day 54: inside the 60-day proration window (6 days left); v1 has no cooling-off; the 10 percent fee applies. |
+| 7 | `monthly_v2_inside_cooling_off` | Carol | v2 (start 04-08) | day 7: inside the 14-day cooling-off. Monthly, so proration cannot apply. |
+| 8 | `annual_v2_day10_cooling_off_beats_proration` | Alex | v2 (start 04-05) | day 10: inside cooling-off (14) and inside proration (60). Both could fire; cooling-off must win (16.3). The seed test asserts the conflict is present; the rules-engine test that proves the evaluation order is a later task. |
+| - | `v1_order_delivered_after_cutover_window_expired` | SIM-1005 Alex | v1 (purchase 02-25) | delivered 03-05, day 41: outside the 30-day v1 window, inside what a 45-day window would be. Fails if the version is chosen by delivery date. |
+| - | `in_transit_on_schedule` | SIM-2003 Blair | v2 | shipped 04-13, expected 04-22, presumed lost 04-27. For order-status lookups. |
+| - | `v2_delivery_exception_before_presumed_lost` | SIM-3001 Carol | v2 | carrier exception 04-09; presumed lost 04-16, one day away. v2 clause 3 permits a lost-shipment refund anyway. |
+| - | `annual_v2_inside_proration_after_cooling_off` | Carol | v2 (start 03-10) | day 36: past cooling-off, inside proration, no fee. |
+| - | `annual_v1_outside_proration_window` | Blair | v1 (start 2025-11-03) | day 163: outside proration; cancellation at period end, no refund. |
+
+`backend/tests/unit/test_seed_definitions.py` asserts each of these properties from the definitions and the real policy text (ceilings, window lengths, cooling-off and proration days are parsed from `policies/`, not hardcoded), and `backend/tests/db/test_seed.py` checks what actually landed in PostgreSQL. Deliberately breaking cases 1, 4 and 8 in the definitions makes the corresponding test fail (checked once by hand on 2026-11-11).
 
 ## 14. Embedding parity gate
 
