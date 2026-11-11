@@ -38,6 +38,14 @@ class Settings(BaseSettings):
     # Completion cap for the explanation call. Reasoning tokens count against it, so a small cap
     # yields an EMPTY reply (finish_reason 'length'), which is treated as a failure.
     llm_explanation_max_tokens: int = 1500
+    # Hybrid retrieval (app/retrieval/hybrid.py). Configuration, not constants in the code.
+    # retrieval_k=7 is chosen from the recall curve in SPEC 7.1 (smallest k that retrieved every
+    # clause the seeded cases need). Weights and the RRF constant are untuned defaults.
+    retrieval_k: int = 7
+    retrieval_candidates: int = 8
+    retrieval_rrf_k: int = 60
+    retrieval_weight_fts: float = 1.0
+    retrieval_weight_vec: float = 1.0
     # PROJECTED cost per 1k tokens (a paid-tier estimate, never incurred cost).
     llm_price_per_1k_in: float = 0.0
     llm_price_per_1k_out: float = 0.0
