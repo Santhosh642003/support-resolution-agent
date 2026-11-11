@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     )
 
     environment: Literal["dev", "test", "prod"] = "dev"
+    # Business-date clock for the running app. "simulated" pins FixedClock to SIMULATED_TODAY so the
+    # seeded data keeps its meaning (SPEC 2.5); "system" uses the real clock. Token and session
+    # expiry always use the database wall clock, whatever this is set to.
+    clock_mode: Literal["simulated", "system"] = "simulated"
     database_url: str = "postgresql+psycopg://support:support@127.0.0.1:5432/support"
 
     # Provider/model are selected by env only. Default is the offline fake.

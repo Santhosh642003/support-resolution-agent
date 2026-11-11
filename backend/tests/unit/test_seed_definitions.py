@@ -10,6 +10,7 @@ import re
 from datetime import date, datetime, timedelta
 
 from app.clock import SIMULATED_TODAY, FixedClock
+from app.domain.rules.business_days import add_business_days
 from app.retrieval.policy_loader import PolicyDocument, load_policies
 from app.seed import ids
 from app.seed.definitions import (
@@ -79,17 +80,6 @@ def proration_days() -> int:
 
 def presumed_lost_business_days() -> int:
     return _clause_number(_doc("shipping", 1), "presumed lost", r"(\d+) business days")
-
-
-def add_business_days(start: date, n: int) -> date:
-    """Monday to Friday, no holiday calendar (SPEC 16.4). Local to this test until
-    app/domain/rules/business_days.py exists; replace this with that module then."""
-    d = start
-    while n > 0:
-        d += timedelta(days=1)
-        if d.weekday() < 5:
-            n -= 1
-    return d
 
 
 # --- derived facts about the seed ---------------------------------------------------------
