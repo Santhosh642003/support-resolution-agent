@@ -13,7 +13,11 @@ from app.retrieval.policy_loader import (
     validate_corpus,
 )
 
-DOCS = {(d.policy_type, d.version): d for d in load_policies()}
+# The ORIGINAL three policies. The corpus was later expanded with distractor documents
+# (task 7C); these assertions are about the original documents and are unchanged in substance.
+ORIGINAL_TYPES = ("shipping", "refund", "cancellation")
+ALL_DOCS = load_policies()
+DOCS = {(d.policy_type, d.version): d for d in ALL_DOCS if d.policy_type in ORIGINAL_TYPES}
 
 
 def _clause(policy_type: str, version: int, number: int) -> str:
@@ -105,7 +109,7 @@ def test_parser_requires_simulated_label_and_valid_front_matter() -> None:
     with pytest.raises(PolicyFormatError, match="missing front matter"):
         parse_policy(_GOOD.replace("title: Refund Policy\n", ""), "x")
     with pytest.raises(PolicyFormatError, match="unknown policy_type"):
-        parse_policy(_GOOD.replace("refund", "warranty", 1), "x")
+        parse_policy(_GOOD.replace("refund", "lottery", 1), "x")  # "warranty" is a real type now
     with pytest.raises(PolicyFormatError, match="before effective_from"):
         parse_policy(_GOOD.replace("title:", "effective_to: 2025-01-01\ntitle:"), "x")
 

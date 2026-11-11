@@ -29,6 +29,14 @@ def ingested(conn: Connection, embedder: OnnxBgeEmbedder) -> Connection:
     return conn
 
 
+# The ORIGINAL three policies; the corpus also holds distractor documents (task 7C).
+ORIGINAL_TYPES = ("shipping", "refund", "cancellation")
+
+
+def _original_count(keys: list[str]) -> int:
+    return sum(k.split("-")[0] in ORIGINAL_TYPES for k in keys)
+
+
 def _pd(y: int, m: int, d: int) -> PurchaseDate:
     return PurchaseDate(date(y, m, d))
 
@@ -52,8 +60,10 @@ def test_reingestion_twice_leaves_chunk_count_and_identifiers_unchanged(
 ) -> None:
     docs = load_policies()
     first = ingest_policies(conn, embedder, docs)
-    assert first.documents_inserted == 5 and first.chunks_inserted == 19
+    total = sum(len(d.clauses) for d in docs)
+    assert first.documents_inserted == len(docs) and first.chunks_inserted == total
     snap1 = _snapshot(conn)
+    assert _original_count([k for k, _, _ in snap1]) == 19  # the original corpus, unchanged
     ids1 = {
         r.chunk_key: r.id for r in conn.execute(text("SELECT id, chunk_key FROM policy_chunks"))
     }
@@ -62,10 +72,11 @@ def test_reingestion_twice_leaves_chunk_count_and_identifiers_unchanged(
     third = ingest_policies(conn, embedder, docs)
     assert second.documents_inserted == third.documents_inserted == 0
     assert second.chunks_inserted == third.chunks_inserted == 0
-    assert second.chunks_unchanged == 19
+    assert second.chunks_unchanged == total
+    assert second.links_inserted == third.links_inserted == 0
 
     assert _snapshot(conn) == snap1
-    assert len(snap1) == 19 and len({k for k, _, _ in snap1}) == 19
+    assert len(snap1) == total and len({k for k, _, _ in snap1}) == total
     ids2 = {
         r.chunk_key: r.id for r in conn.execute(text("SELECT id, chunk_key FROM policy_chunks"))
     }
@@ -89,7 +100,7 @@ def test_chunks_carry_denormalized_type_version_validity_and_model_identity(
             " vector_dims(embedding) AS dims FROM policy_chunks"
         )
     ).all()
-    assert len(rows) == 19
+    assert len(rows) == sum(len(d.clauses) for d in load_policies())
     for r in rows:
         assert (r.embedding_model, r.embedding_model_revision) == (
             EMBEDDING_MODEL_ID,

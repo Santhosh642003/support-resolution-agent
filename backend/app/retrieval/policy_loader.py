@@ -9,9 +9,23 @@ Source format: a small front matter block, a banner line, then numbered clauses.
     effective_to: 2026-02-28      (optional, INCLUSIVE; omitted means open-ended)
     title: Refund Policy
     simulated: true
+    audience: customer            (optional: customer | merchant; default customer)
+    status: current               (optional: current | archived; default current)
+    incorporates: 5 <- refund-v1-clause-5, refund-v1-clause-6   (optional, see below)
     ---
     1. First clause text.
     2. Second clause text.
+
+Incorporation. A clause of a later version may declare that it INCORPORATES specific clauses
+of an earlier version of the same policy, by stable chunk key (`incorporates: <clause> <- <key>,
+<key>; <clause> <- <key>`). Which version is IN EFFECT is still decided only by the validity
+dates; an incorporated clause is brought in by the in-effect clause that names it, not because
+its own validity matched. One hop only: a target may not itself incorporate anything.
+
+The content hash covers what a citation depends on (identity, dates, title, clauses). The
+metadata-only front matter lines (audience, status, incorporates) are excluded from it, so adding
+or declaring them never changes the hash of an already-published document; ingestion verifies
+them separately.
 
 Chunk identity: clause numbers are written explicitly in the source, and the chunk key is
 `<policy_type>-v<version>-clause-<number>` (for example `refund-v2-clause-3`). A citation
@@ -26,7 +40,20 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 
-POLICY_TYPES = ("shipping", "refund", "cancellation")
+POLICY_TYPES = (
+    "shipping",
+    "refund",
+    "cancellation",
+    "merchant_returns",
+    "gift_cards",
+    "shipping_restrictions",
+    "warranty",
+    "faq_archive",
+)
+AUDIENCES = ("customer", "merchant")
+STATUSES = ("current", "archived")
+# Front matter keys that do not enter the content hash.
+_METADATA_ONLY = ("audience", "status", "incorporates")
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_POLICIES_DIR = REPO_ROOT / "policies"
 
@@ -45,6 +72,15 @@ class Clause:
 
 
 @dataclass(frozen=True)
+class Incorporation:
+    """Clause `clause_number` of this document incorporates the clauses `targets` (chunk keys of
+    an earlier version of the same policy)."""
+
+    clause_number: int
+    targets: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class PolicyDocument:
     policy_type: str
     version: int
@@ -54,6 +90,9 @@ class PolicyDocument:
     source_path: str
     content_hash: str
     clauses: tuple[Clause, ...]
+    audience: str = "customer"
+    status: str = "current"
+    incorporations: tuple[Incorporation, ...] = ()
 
     @property
     def valid_from(self) -> date:
@@ -77,6 +116,35 @@ class PolicyDocument:
 
 def chunk_key(policy_type: str, version: int, clause_number: int) -> str:
     return f"{policy_type}-v{version}-clause-{clause_number}"
+
+
+def parse_incorporations(value: str, source_path: str) -> tuple[Incorporation, ...]:
+    """`5 <- refund-v1-clause-5, refund-v1-clause-6; 2 <- refund-v1-clause-3`."""
+    out: list[Incorporation] = []
+    for part in (p.strip() for p in value.split(";") if p.strip()):
+        left, arrow, right = part.partition("<-")
+        keys = tuple(k.strip() for k in right.split(",") if k.strip())
+        if not arrow or not left.strip().isdigit() or not keys:
+            raise PolicyFormatError(f"{source_path}: bad incorporates entry {part!r}")
+        if len(set(keys)) != len(keys):
+            raise PolicyFormatError(f"{source_path}: duplicate incorporation target in {part!r}")
+        out.append(Incorporation(int(left.strip()), keys))
+    numbers = [i.clause_number for i in out]
+    if len(set(numbers)) != len(numbers):
+        raise PolicyFormatError(f"{source_path}: a clause may be listed only once in incorporates")
+    return tuple(out)
+
+
+def _content_hash(lines: list[str], end: int) -> str:
+    """sha256 of the normalized file text, minus metadata-only front matter lines. For a file
+    without those lines this equals sha256 of the whole normalized text (the original
+    definition)."""
+    kept = [
+        line
+        for i, line in enumerate(lines)
+        if not (0 < i < end and line.partition(":")[0].strip() in _METADATA_ONLY)
+    ]
+    return hashlib.sha256("\n".join(kept).encode("utf-8")).hexdigest()
 
 
 def parse_policy(text: str, source_path: str) -> PolicyDocument:
@@ -104,6 +172,13 @@ def parse_policy(text: str, source_path: str) -> PolicyDocument:
         raise PolicyFormatError(f"{source_path}: policies must be labeled simulated: true")
     if meta["policy_type"] not in POLICY_TYPES:
         raise PolicyFormatError(f"{source_path}: unknown policy_type {meta['policy_type']!r}")
+    audience = meta.get("audience", "customer")
+    status = meta.get("status", "current")
+    if audience not in AUDIENCES:
+        raise PolicyFormatError(f"{source_path}: audience must be one of {AUDIENCES}")
+    if status not in STATUSES:
+        raise PolicyFormatError(f"{source_path}: status must be one of {STATUSES}")
+    incorporations = parse_incorporations(meta.get("incorporates", ""), source_path)
 
     try:
         version = int(meta["version"])
@@ -139,8 +214,11 @@ def parse_policy(text: str, source_path: str) -> PolicyDocument:
         effective_to=effective_to,
         title=meta["title"],
         source_path=source_path,
-        content_hash=hashlib.sha256(normalized.encode("utf-8")).hexdigest(),
+        content_hash=_content_hash(lines, end),
         clauses=tuple(clauses),
+        audience=audience,
+        status=status,
+        incorporations=incorporations,
     )
 
 
@@ -168,6 +246,48 @@ def validate_corpus(docs: Iterable[PolicyDocument]) -> None:
                 )
         if versions[-1].valid_to_exclusive is not None:
             raise PolicyFormatError(f"{policy_type}: the latest version must be open-ended")
+    _validate_incorporations(by_type)
+
+
+def _validate_incorporations(by_type: dict[str, list[PolicyDocument]]) -> None:
+    """Every declared link must name a real clause of an EARLIER version of the SAME policy, and
+    the graph is one hop deep: no target may itself incorporate, no source may be a target."""
+    known: dict[str, PolicyDocument] = {}
+    for versions in by_type.values():
+        for d in versions:
+            for c in d.clauses:
+                known[d.chunk_key(c.number)] = d
+    sources: set[str] = set()
+    targets: set[str] = set()
+    for versions in by_type.values():
+        for d in versions:
+            for inc in d.incorporations:
+                if inc.clause_number not in {c.number for c in d.clauses}:
+                    raise PolicyFormatError(
+                        f"{d.source_path}: incorporates names clause {inc.clause_number}, "
+                        "which does not exist"
+                    )
+                src = d.chunk_key(inc.clause_number)
+                sources.add(src)
+                for t in inc.targets:
+                    target_doc = known.get(t)
+                    if target_doc is None:
+                        raise PolicyFormatError(f"{src}: incorporates unknown clause {t!r}")
+                    if target_doc.policy_type != d.policy_type:
+                        raise PolicyFormatError(
+                            f"{src}: may only incorporate the same policy, not {t}"
+                        )
+                    if target_doc.version >= d.version:
+                        raise PolicyFormatError(
+                            f"{src}: may only incorporate an EARLIER version, not {t}"
+                        )
+                    targets.add(t)
+    chained = sources & targets
+    if chained:
+        raise PolicyFormatError(
+            "incorporation chains are not supported (one hop only); "
+            f"chained clauses: {sorted(chained)}"
+        )
 
 
 def load_policies(policies_dir: Path = DEFAULT_POLICIES_DIR) -> list[PolicyDocument]:

@@ -10,12 +10,27 @@ The date passed is ALWAYS the purchase date (the subscription start date for can
 selects the policy version. The refund window anchor (delivery / presumed-lost date) is a
 different date and never goes here (`PurchaseDate`, not `WindowAnchorDate`).
 
+TWO WAYS A CLAUSE CAN BE RETURNED, deliberately kept apart (a future reader will want to
+collapse them; do not):
+
+  * DIRECT: the clause's own validity range contains the purchase date. This is what the legs
+    return and what `RetrievalResult.clauses` holds. The validity range decides which VERSION
+    IS IN EFFECT.
+  * INCORPORATED: an earlier-version clause that an in-effect clause explicitly names
+    (`policy_incorporations`, declared in the document's front matter), followed ONE hop after
+    fusion. It arrives because the in-effect clause pulled it in, NOT because its own validity
+    matched the date (it usually did not: it is a v1 clause for a v2 purchase). It is held in
+    `RetrievalResult.incorporated`, carries `incorporated_by`, and its citation always names the
+    clause that incorporated it. A bare citation to the earlier version would be wrong: that
+    version is not in effect for this purchase.
+
 Fusion weights, the fused list length `k`, the per-leg candidate depth and the RRF constant are
-configuration (Settings.retrieval_*), not constants in this module.
+configuration (Settings.retrieval_*), not constants in this module. Incorporated clauses are
+additional to `k`.
 """
 
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from sqlalchemy import Connection, text
 
@@ -25,7 +40,7 @@ from app.retrieval.embedder import Embedder
 from app.retrieval.ingest import vector_literal
 from app.retrieval.policy_store import PolicyClause
 
-# Which policy types an intent needs. Deterministic routing, decided in code, not by a model.
+# The policy types an intent NEEDS. Deterministic routing, decided in code, not by a model.
 POLICY_TYPES_BY_INTENT: dict[str, tuple[str, ...]] = {
     "order_status": ("shipping",),
     "refund_request": ("refund", "shipping"),  # shipping only if delivery_issue (see below)
@@ -33,27 +48,73 @@ POLICY_TYPES_BY_INTENT: dict[str, tuple[str, ...]] = {
     "policy_question": ("shipping", "refund", "cancellation"),
 }
 
+# Customer-facing policies that a message about the core type could plausibly touch. The message
+# does not reveal which one applies ("my gift card order", "it arrived broken": warranty or
+# refund?), so retrieval for a core type is scoped to the core type PLUS these, and ranking has
+# to tell them apart. Audience and status are filtered separately (ScopeFilters).
+RELATED_TYPES: dict[str, tuple[str, ...]] = {
+    "refund": ("gift_cards", "warranty"),
+    "shipping": ("shipping_restrictions",),
+    "cancellation": ("gift_cards",),
+}
 
-def policy_types_for(intents: Sequence[str], *, delivery_issue: bool = False) -> tuple[str, ...]:
-    """Union of the policy types for several intents (a combined request), in a stable order.
+_ORDER = (
+    "shipping",
+    "refund",
+    "cancellation",
+    "gift_cards",
+    "shipping_restrictions",
+    "warranty",
+    "merchant_returns",
+    "faq_archive",
+)
 
-    Refund requests need the shipping policy only when the issue is a delivery problem (the
-    shipment is late or missing); otherwise the shipping clauses are noise in the prompt and
-    dilute recall. `delivery_issue` is a structured fact (the reason class from extraction, or a
-    late/lost shipment found in the live data), never inferred here from free text.
-    """
+
+def _core_types(intents: Sequence[str], delivery_issue: bool) -> set[str]:
     wanted = {t for i in intents for t in POLICY_TYPES_BY_INTENT.get(i, ())}
     only_a_refund = "refund_request" in intents and not (
         {"order_status", "policy_question"} & set(intents)
     )
     if only_a_refund and not delivery_issue:
         wanted.discard("shipping")
-    return tuple(t for t in ("shipping", "refund", "cancellation") if t in wanted)
+    return wanted
+
+
+def policy_types_for(intents: Sequence[str], *, delivery_issue: bool = False) -> tuple[str, ...]:
+    """The policy types the intents NEED, in a stable order (a combined request is a union).
+
+    Refund requests include the shipping policy only for delivery problems: otherwise the
+    shipping clauses are noise in the prompt. `delivery_issue` is a structured fact (the reason
+    class from extraction, or a late/lost shipment found in the live data), never inferred here
+    from free text.
+    """
+    wanted = _core_types(intents, delivery_issue)
+    return tuple(t for t in _ORDER if t in wanted)
+
+
+def retrieval_scope_for(intents: Sequence[str], *, delivery_issue: bool = False) -> tuple[str, ...]:
+    """The core types plus the related customer-facing types a message could plausibly touch."""
+    core = _core_types(intents, delivery_issue)
+    wanted = set(core) | {r for t in core for r in RELATED_TYPES.get(t, ())}
+    return tuple(t for t in _ORDER if t in wanted)
+
+
+@dataclass(frozen=True)
+class ScopeFilters:
+    """Metadata filters applied inside each leg, beside the date filter. Both default ON: a
+    seller-facing policy does not apply to customers, and an archived document is superseded.
+    (Switching them off exists to MEASURE what they are worth, not to be used.)"""
+
+    customer_only: bool = True  # documents.audience = 'customer'
+    current_only: bool = True  # documents.status = 'current'
+
+
+DEFAULT_FILTERS = ScopeFilters()  # frozen: safe as a default argument
 
 
 @dataclass(frozen=True)
 class HybridConfig:
-    k: int  # clauses returned
+    k: int  # direct clauses returned
     candidates_per_leg: int  # depth of each leg before fusion
     rrf_k: int  # RRF constant: score = w / (rrf_k + rank)
     weight_fts: float
@@ -70,12 +131,35 @@ class HybridConfig:
         )
 
 
+def _short(c: PolicyClause) -> str:
+    return f"v{c.version} clause {c.clause_number}"
+
+
 @dataclass(frozen=True)
 class RetrievedClause:
     clause: PolicyClause
     score: float
     fts_rank: int | None  # 1-based rank in the full-text leg, None if that leg did not return it
     vec_rank: int | None
+    # Set ONLY on an incorporated clause: the in-effect clause that pulled it in.
+    incorporated_by: PolicyClause | None = None
+    # Set on a DIRECT clause: the earlier-version clauses it incorporates (one hop).
+    incorporates: tuple[PolicyClause, ...] = ()
+
+    @property
+    def is_incorporated(self) -> bool:
+        return self.incorporated_by is not None
+
+    @property
+    def citation(self) -> str:
+        """Provenance-preserving citation. Never a bare citation to an earlier version."""
+        if self.incorporated_by is not None:
+            return f"{self.clause.citation}, as incorporated by {self.incorporated_by.citation}"
+        if self.incorporates:
+            return f"{self.clause.citation}, incorporating " + ", ".join(
+                _short(t) for t in self.incorporates
+            )
+        return self.clause.citation
 
 
 @dataclass(frozen=True)
@@ -89,17 +173,37 @@ class RetrievalTrace:
 
 @dataclass(frozen=True)
 class RetrievalResult:
-    clauses: tuple[RetrievedClause, ...]
+    clauses: tuple[RetrievedClause, ...]  # DIRECT: in effect on the purchase date, at most k
+    incorporated: tuple[RetrievedClause, ...] = ()  # pulled in by a direct clause, one hop
     trace: RetrievalTrace = field(default_factory=lambda: RetrievalTrace(0))
+
+    def context(self) -> tuple[RetrievedClause, ...]:
+        """Everything to show the explainer: direct clauses, then what they incorporate."""
+        return self.clauses + self.incorporated
+
+    def citations(self) -> list[str]:
+        return [r.citation for r in self.clauses]
 
 
 _COLUMNS = (
-    "chunk_key, policy_type, version, clause_number, text,"
-    " lower(validity) AS valid_from, upper(validity) AS valid_to"
+    "c.chunk_key, c.policy_type, c.version, c.clause_number, c.text,"
+    " lower(c.validity) AS valid_from, upper(c.validity) AS valid_to"
 )
+_FROM = "policy_chunks c JOIN policy_documents d ON d.id = c.document_id"
 
-# Both legs share this scope. It is the date filter, applied inside each leg.
-_SCOPE = "validity @> CAST(:d AS date) AND policy_type = ANY(CAST(:types AS text[]))"
+
+def _scope(filters: ScopeFilters) -> str:
+    """The DIRECT scope: the date filter, the policy-type scope, and the metadata filters. It is
+    part of each leg's WHERE clause, so nothing outside it is ever ranked."""
+    parts = [
+        "c.validity @> CAST(:d AS date)",
+        "c.policy_type = ANY(CAST(:types AS text[]))",
+    ]
+    if filters.customer_only:
+        parts.append("d.audience = 'customer'")
+    if filters.current_only:
+        parts.append("d.status = 'current'")
+    return " AND ".join(parts)
 
 
 def _clause(r: object) -> PolicyClause:
@@ -115,16 +219,21 @@ def _clause(r: object) -> PolicyClause:
 
 
 def fts_leg(
-    conn: Connection, query: str, d: PurchaseDate, types: Sequence[str], n: int
+    conn: Connection,
+    query: str,
+    d: PurchaseDate,
+    types: Sequence[str],
+    n: int,
+    filters: ScopeFilters = DEFAULT_FILTERS,
 ) -> list[PolicyClause]:
     """Full-text leg, date-filtered. Terms are OR-ed: a natural-language message must not need
     every one of its words to appear in a clause (websearch/plain semantics are AND)."""
     rows = conn.execute(
         text(
             "WITH q AS (SELECT replace(plainto_tsquery('english', :q)::text, '&', '|')::tsquery"  # noqa: S608
-            f" AS tsq) SELECT {_COLUMNS} FROM policy_chunks, q"  # (constants only, no input)
-            f" WHERE {_SCOPE} AND tsv @@ q.tsq"
-            " ORDER BY ts_rank(tsv, q.tsq) DESC, chunk_key LIMIT :n"
+            f" AS tsq) SELECT {_COLUMNS} FROM {_FROM}, q"  # (constants only, no input)
+            f" WHERE {_scope(filters)} AND c.tsv @@ q.tsq"
+            " ORDER BY ts_rank(c.tsv, q.tsq) DESC, c.chunk_key LIMIT :n"
         ),
         {"q": query, "d": d, "types": list(types), "n": n},
     )
@@ -132,16 +241,21 @@ def fts_leg(
 
 
 def vector_leg(
-    conn: Connection, qvec: Sequence[float], d: PurchaseDate, types: Sequence[str], n: int
+    conn: Connection,
+    qvec: Sequence[float],
+    d: PurchaseDate,
+    types: Sequence[str],
+    n: int,
+    filters: ScopeFilters = DEFAULT_FILTERS,
 ) -> list[PolicyClause]:
     """Vector leg (cosine distance), date-filtered. The iterative scan keeps a selective filter
     from silently under-returning if the planner uses the HNSW index."""
     conn.execute(text("SET LOCAL hnsw.iterative_scan = strict_order"))
     rows = conn.execute(
         text(
-            f"SELECT {_COLUMNS} FROM policy_chunks"  # noqa: S608 (constants only)
-            f" WHERE {_SCOPE}"
-            " ORDER BY embedding <=> CAST(:v AS vector), chunk_key LIMIT :n"
+            f"SELECT {_COLUMNS} FROM {_FROM}"  # noqa: S608 (constants only)
+            f" WHERE {_scope(filters)}"
+            " ORDER BY c.embedding <=> CAST(:v AS vector), c.chunk_key LIMIT :n"
         ),
         {"v": vector_literal(qvec), "d": d, "types": list(types), "n": n},
     )
@@ -174,6 +288,45 @@ def fuse(
     return scored[: cfg.k]
 
 
+def follow_incorporations(
+    conn: Connection, direct: Sequence[RetrievedClause]
+) -> tuple[list[RetrievedClause], list[RetrievedClause]]:
+    """ONE hop from the in-effect (direct) clauses to the earlier-version clauses they incorporate.
+
+    Deliberately has NO date filter: the targets are earlier versions whose validity does not
+    contain the purchase date. They are returned only because a direct clause names them. The
+    database guarantees the links are same-policy, earlier-version and never chained.
+
+    Returns (direct clauses annotated with what they incorporate, the incorporated clauses).
+    """
+    if not direct:
+        return [], []
+    rows = conn.execute(
+        text(
+            f"SELECT i.source_chunk_key AS via, {_COLUMNS}"  # noqa: S608 (constants only)
+            " FROM policy_incorporations i JOIN policy_chunks c"
+            " ON c.chunk_key = i.target_chunk_key"
+            " WHERE i.source_chunk_key = ANY(CAST(:k AS text[]))"
+            " ORDER BY i.source_chunk_key, c.clause_number"
+        ),
+        {"k": [r.clause.chunk_key for r in direct]},
+    )
+    by_source: dict[str, list[PolicyClause]] = {}
+    for row in rows:
+        by_source.setdefault(row.via, []).append(_clause(row))
+    annotated = [
+        replace(r, incorporates=tuple(by_source.get(r.clause.chunk_key, ()))) for r in direct
+    ]
+    pulled: dict[str, RetrievedClause] = {}
+    for r in direct:
+        for target in by_source.get(r.clause.chunk_key, ()):
+            pulled.setdefault(
+                target.chunk_key,
+                RetrievedClause(target, 0.0, None, None, incorporated_by=r.clause),
+            )
+    return annotated, list(pulled.values())
+
+
 def retrieve(
     conn: Connection,
     embedder: Embedder,
@@ -181,20 +334,29 @@ def retrieve(
     purchase_date: PurchaseDate,
     policy_types: Sequence[str],
     cfg: HybridConfig,
+    filters: ScopeFilters = DEFAULT_FILTERS,
+    *,
+    follow: bool = True,
 ) -> RetrievalResult:
-    """Date-filtered hybrid retrieval. Returns at most cfg.k clauses of the versions in effect on
-    `purchase_date`, never more and never from another version."""
+    """Date-filtered hybrid retrieval. Returns at most cfg.k DIRECT clauses of the versions in
+    effect on `purchase_date`, never from another version; plus, if `follow`, the earlier-version
+    clauses those direct clauses explicitly incorporate (one hop, flagged, never silent)."""
     if not policy_types:
         return RetrievalResult(())
     eligible = conn.execute(
-        text(f"SELECT count(*) FROM policy_chunks WHERE {_SCOPE}"),  # noqa: S608
+        text(f"SELECT count(*) FROM {_FROM} WHERE {_scope(filters)}"),  # noqa: S608
         {"d": purchase_date, "types": list(policy_types)},
     ).scalar_one()
-    fts = fts_leg(conn, query, purchase_date, policy_types, cfg.candidates_per_leg)
+    fts = fts_leg(conn, query, purchase_date, policy_types, cfg.candidates_per_leg, filters)
     qvec = embedder.embed([query])[0]  # no query-instruction prefix (SPEC 14)
-    vec = vector_leg(conn, qvec, purchase_date, policy_types, cfg.candidates_per_leg)
+    vec = vector_leg(conn, qvec, purchase_date, policy_types, cfg.candidates_per_leg, filters)
+    direct = fuse(fts, vec, cfg)
+    incorporated: list[RetrievedClause] = []
+    if follow:
+        direct, incorporated = follow_incorporations(conn, direct)
     return RetrievalResult(
-        tuple(fuse(fts, vec, cfg)),
+        tuple(direct),
+        tuple(incorporated),
         RetrievalTrace(
             int(eligible),
             tuple(c.chunk_key for c in fts),

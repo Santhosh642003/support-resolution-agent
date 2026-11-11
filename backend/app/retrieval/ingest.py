@@ -34,6 +34,8 @@ class IngestReport:
     documents_inserted: int
     chunks_inserted: int
     chunks_unchanged: int
+    links_inserted: int = 0
+    links_unchanged: int = 0
 
 
 def vector_literal(vec: Sequence[float]) -> str:
@@ -51,7 +53,8 @@ def ingest_policies(
     for doc in docs:
         row = conn.execute(
             text(
-                "SELECT id, content_hash, lower(validity) AS lo, upper(validity) AS hi"
+                "SELECT id, content_hash, audience, status, lower(validity) AS lo,"
+                " upper(validity) AS hi"
                 " FROM policy_documents WHERE policy_type = :t AND version = :v"
             ),
             {"t": doc.policy_type, "v": doc.version},
@@ -60,8 +63,9 @@ def ingest_policies(
             doc_id = conn.execute(
                 text(
                     "INSERT INTO policy_documents (policy_type, version, validity, title,"
-                    " source_path, content_hash)"
-                    " VALUES (:t, :v, daterange(:lo, :hi, '[)'), :title, :src, :h) RETURNING id"
+                    " source_path, content_hash, audience, status)"
+                    " VALUES (:t, :v, daterange(:lo, :hi, '[)'), :title, :src, :h, :aud, :st)"
+                    " RETURNING id"
                 ),
                 {
                     "t": doc.policy_type,
@@ -71,11 +75,18 @@ def ingest_policies(
                     "title": doc.title,
                     "src": doc.source_path,
                     "h": doc.content_hash,
+                    "aud": doc.audience,
+                    "st": doc.status,
                 },
             ).scalar_one()
             docs_inserted += 1
         else:
             doc_id = row.id
+            if (row.audience, row.status) != (doc.audience, doc.status):
+                raise PolicyChangedError(
+                    f"{doc.source_path}: audience/status differ from the stored document; "
+                    "publish a new version instead"
+                )
             if row.content_hash != doc.content_hash:
                 raise PolicyChangedError(
                     f"{doc.source_path}: text changed but {doc.policy_type} v{doc.version} is "
@@ -145,7 +156,49 @@ def ingest_policies(
                 )
             chunks_inserted += len(to_embed)
 
-    return IngestReport(docs_inserted, chunks_inserted, chunks_unchanged)
+    links_inserted, links_unchanged = _ingest_incorporations(conn, docs)
+    return IngestReport(
+        docs_inserted, chunks_inserted, chunks_unchanged, links_inserted, links_unchanged
+    )
+
+
+def _ingest_incorporations(conn: Connection, docs: Sequence[PolicyDocument]) -> tuple[int, int]:
+    """Insert declared incorporation links (after ALL chunks exist, since links name chunks of other
+    documents). Missing links are inserted: that is how a link declared on an already-ingested
+    document arrives. A stored link that the source file no longer declares is an error: links
+    are append-only, so a change needs a new version."""
+    inserted = unchanged = 0
+    for doc in docs:
+        declared = {
+            (doc.chunk_key(i.clause_number), t) for i in doc.incorporations for t in i.targets
+        }
+        sources = [doc.chunk_key(c.number) for c in doc.clauses]
+        stored = {
+            (r.source_chunk_key, r.target_chunk_key)
+            for r in conn.execute(
+                text(
+                    "SELECT source_chunk_key, target_chunk_key FROM policy_incorporations"
+                    " WHERE source_chunk_key = ANY(CAST(:s AS text[]))"
+                ),
+                {"s": sources},
+            )
+        }
+        extra = stored - declared
+        if extra:
+            raise PolicyChangedError(
+                f"{doc.source_path}: stored incorporation links not in source: {sorted(extra)}"
+            )
+        for source, target in sorted(declared - stored):
+            conn.execute(
+                text(
+                    "INSERT INTO policy_incorporations (source_chunk_key, target_chunk_key)"
+                    " VALUES (:s, :t)"
+                ),
+                {"s": source, "t": target},
+            )
+            inserted += 1
+        unchanged += len(declared & stored)
+    return inserted, unchanged
 
 
 def main(argv: list[str]) -> None:

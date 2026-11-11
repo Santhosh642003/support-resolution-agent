@@ -15,6 +15,8 @@ from sqlalchemy import Connection, Row, text
 
 from app.domain.types import PurchaseDate
 
+_LABELS = {"faq_archive": "Archived FAQ"}
+
 
 @dataclass(frozen=True)
 class PolicyClause:
@@ -29,9 +31,10 @@ class PolicyClause:
     @property
     def citation(self) -> str:
         """Human-checkable label, e.g. 'Refund Policy v2, clause 3'."""
-        return (
-            f"{self.policy_type.capitalize()} Policy v{self.version}, clause {self.clause_number}"
+        label = _LABELS.get(self.policy_type) or (
+            " ".join(w.capitalize() for w in self.policy_type.split("_")) + " Policy"
         )
+        return f"{label} v{self.version}, clause {self.clause_number}"
 
 
 _COLUMNS = (
