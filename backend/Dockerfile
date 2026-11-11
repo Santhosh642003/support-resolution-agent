@@ -13,6 +13,9 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY app ./app
 RUN uv sync --frozen --no-dev
 
+# Pinned embedding model; the build FAILS on a SHA-256 mismatch (no warn-and-continue).
+RUN /srv/.venv/bin/python -m app.retrieval.fetch_model
+
 RUN useradd --system --uid 10001 appuser
 USER appuser
 EXPOSE 8000
