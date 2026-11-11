@@ -36,3 +36,13 @@ A running log of real defects found during development, each with the test or ch
 - **Found:** 2026-11-10, task 3, while extending the append-only tests.
 - **Symptom:** `TRUNCATE refunds` returned SQLSTATE 55006 (pending trigger events) and then 0A000 (table referenced by a foreign key) instead of the append-only trigger's `restrict_violation`.
 - **Resolution:** both are native protections that still block the operation. The test now fires the deferred check first and uses `TRUNCATE ... CASCADE`, the case where only the `forbid_mutation` trigger stands in the way.
+
+## F-006: tests shared one database and read whole tables, so another test's committed rows broke the assertions
+
+- **Found:** 2026-11-11, task 5 (seed data), by three failing tests on the first full-suite run.
+- **Tests:** `backend/tests/db/test_seed.py::test_cross_customer_ownership_holds_for_every_seeded_row`, `::test_no_refunds_are_seeded_and_the_drift_assertion_passes`, `::test_seed_text_is_labeled_simulated_in_the_database`. They passed when run alone and failed in the full suite, e.g. an "unlabeled" customer named `Race` in a query that was meant to see only seeded rows.
+- **Cause:** the database fixtures give each test a rolled-back transaction, but the concurrency tests (`test_concurrent_refunds.py`) must commit, because a real race needs two real connections. Their rows (customers, orders, refunds) stay in the session-scoped test database. My new tests ran `SELECT ... FROM customers`, `FROM refunds` and `FROM orders` with no filter, so they also read those rows. The seed itself was correct.
+- **Fix:** assertions about the seed are scoped to the seeded customers' ids (`_seed_customer_ids()`); they never read a whole table.
+- **Why this is logged although the seed was fine:** the failure was visible only because the polluting rows happened to violate the assertion. The same pollution can make an assertion *pass* wrongly: `count(*) = 0` over an unfiltered table is true only if no earlier test committed there, and `== N` is true only if none added more. Such a test is green for the wrong reason and goes red or green depending on test order. It will recur as the suite grows.
+- **Class of bug:** shared mutable test state; order-dependent tests; false confidence from a green result that does not depend on the thing under test.
+- **Rule going forward:** any test that asserts on a table's contents scopes the query to ids it created or seeded. Tests that commit (concurrency) are the only polluters and are the thing to fix first if this recurs, by cleaning up after themselves or using their own database.

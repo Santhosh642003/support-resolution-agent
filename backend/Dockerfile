@@ -12,6 +12,9 @@ COPY pyproject.toml uv.lock .python-version ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 COPY app ./app
+# Migrations ship in the image so the deployment target can run `alembic upgrade head`.
+COPY alembic.ini ./
+COPY alembic ./alembic
 RUN uv sync --frozen --no-dev
 
 # Policy corpus (a named build context, so the repo root and its untracked files are never sent to
