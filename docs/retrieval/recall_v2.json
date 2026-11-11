@@ -1,0 +1,991 @@
+{
+  "R1": {
+    "chosen": "B",
+    "fts_only_full_recall_k7_selection": {
+      "A": 6,
+      "B": 13,
+      "C": 13,
+      "D": 5
+    }
+  },
+  "R2": {
+    "adopted": "vector_only",
+    "best_hybrid": "hybrid_w1.0",
+    "rule": "hybrid adopted only if its best weight strictly beats vector_only on selection at k=7",
+    "selection_full_recall_k7": {
+      "fts_only": 15,
+      "hybrid_w0.25": 16,
+      "hybrid_w0.5": 16,
+      "hybrid_w1.0": 16,
+      "vector_only": 16
+    }
+  },
+  "R3": {
+    "adopted_system": "vector_only",
+    "chosen_k": 7,
+    "rule_met": true
+  },
+  "diagnostics": {
+    "gift_card_scoping": {
+      "order_with_gift_card_full_recall": 4,
+      "queries": 4,
+      "same_queries_on_an_order_without_one_full_recall": 0,
+      "scope_trace_reason_when_excluded": [
+        "the order contains no gift card item"
+      ]
+    },
+    "missed_clause_attribution_at_final_config": {
+      "heldout": {
+        "date": 0,
+        "ranking": 3,
+        "scoping": 0
+      },
+      "selection": {
+        "date": 0,
+        "ranking": 0,
+        "scoping": 0
+      }
+    },
+    "non_trivial_queries_only": {
+      "definition": "queries whose in-scope set has more than 3 clauses",
+      "heldout": {
+        "full_recall": {
+          "fts_only": {
+            "10": 20,
+            "3": 7,
+            "4": 12,
+            "5": 18,
+            "6": 18,
+            "7": 19,
+            "8": 20,
+            "9": 20
+          },
+          "hybrid_w0.25": {
+            "10": 20,
+            "3": 2,
+            "4": 7,
+            "5": 13,
+            "6": 14,
+            "7": 17,
+            "8": 19,
+            "9": 20
+          },
+          "hybrid_w0.5": {
+            "10": 20,
+            "3": 4,
+            "4": 9,
+            "5": 12,
+            "6": 15,
+            "7": 17,
+            "8": 19,
+            "9": 20
+          },
+          "hybrid_w1.0": {
+            "10": 20,
+            "3": 5,
+            "4": 9,
+            "5": 13,
+            "6": 15,
+            "7": 17,
+            "8": 19,
+            "9": 20
+          },
+          "vector_only": {
+            "10": 20,
+            "3": 1,
+            "4": 5,
+            "5": 13,
+            "6": 16,
+            "7": 17,
+            "8": 20,
+            "9": 20
+          }
+        },
+        "queries": 20,
+        "random": {
+          "10": 11.91,
+          "3": 0.6,
+          "4": 1.34,
+          "5": 2.47,
+          "6": 4.07,
+          "7": 6.19,
+          "8": 8.92,
+          "9": 10.33
+        },
+        "scope_sizes": [
+          8,
+          14
+        ]
+      },
+      "selection": {
+        "full_recall": {
+          "fts_only": {
+            "10": 10,
+            "3": 5,
+            "4": 5,
+            "5": 7,
+            "6": 8,
+            "7": 9,
+            "8": 10,
+            "9": 10
+          },
+          "hybrid_w0.25": {
+            "10": 10,
+            "3": 0,
+            "4": 3,
+            "5": 5,
+            "6": 9,
+            "7": 10,
+            "8": 10,
+            "9": 10
+          },
+          "hybrid_w0.5": {
+            "10": 10,
+            "3": 0,
+            "4": 4,
+            "5": 6,
+            "6": 9,
+            "7": 10,
+            "8": 10,
+            "9": 10
+          },
+          "hybrid_w1.0": {
+            "10": 10,
+            "3": 2,
+            "4": 4,
+            "5": 8,
+            "6": 9,
+            "7": 10,
+            "8": 10,
+            "9": 10
+          },
+          "vector_only": {
+            "10": 10,
+            "3": 0,
+            "4": 3,
+            "5": 5,
+            "6": 8,
+            "7": 10,
+            "8": 10,
+            "9": 10
+          }
+        },
+        "queries": 10,
+        "random": {
+          "10": 5.96,
+          "3": 0.3,
+          "4": 0.67,
+          "5": 1.24,
+          "6": 2.03,
+          "7": 3.1,
+          "8": 4.46,
+          "9": 5.16
+        },
+        "scope_sizes": [
+          8,
+          14
+        ]
+      }
+    },
+    "numeric_probe": {
+      "found_in_top_k": {
+        "1": {
+          "fts_baseline": 10,
+          "fts_tuned": 10,
+          "hybrid_w1.0_tuned": 10,
+          "vector": 10
+        },
+        "3": {
+          "fts_baseline": 10,
+          "fts_tuned": 10,
+          "hybrid_w1.0_tuned": 10,
+          "vector": 10
+        },
+        "7": {
+          "fts_baseline": 10,
+          "fts_tuned": 10,
+          "hybrid_w1.0_tuned": 10,
+          "vector": 10
+        }
+      },
+      "queries": 10
+    },
+    "scope_coverage": {
+      "needed_clauses": 96,
+      "needed_clauses_inside_scope": 96
+    }
+  },
+  "final": {
+    "heldout_full_recall_by_k": {
+      "10": 32,
+      "3": 13,
+      "4": 17,
+      "5": 25,
+      "6": 28,
+      "7": 29,
+      "8": 32,
+      "9": 32
+    },
+    "heldout_queries": 32,
+    "k": 7,
+    "lexical_config": "B",
+    "selection_full_recall_by_k": {
+      "10": 16,
+      "3": 6,
+      "4": 9,
+      "5": 11,
+      "6": 14,
+      "7": 16,
+      "8": 16,
+      "9": 16
+    },
+    "system": "vector_only"
+  },
+  "protocol": "(written before this module was run):\n\n  Sets. Selection = the 16 queries k was first chosen on. Held-out = the 32 queries of round 1.\n  THIS IS THE LAST TUNING PASS AGAINST THE EXISTING HELD-OUT SET: it has now informed one\n  configuration decision (below) and is weakly contaminated. The headline retrieval figure in the\n  M3 report must come from a set generated fresh at that point. No third cycle is run on it.\n  Held-out is REPORTED at every stage; it never chooses anything.\n\n  Stage 1, lexical configuration (R1). Four configurations, fixed in advance (LEXICAL_GRID):\n    A  websearch AND, ts_rank_cd, title weight A\n    B  AND then OR fill, ts_rank_cd, title weight A\n    C  OR, ts_rank_cd, title weight A\n    D  OR, ts_rank, no weights            (the original, untuned leg: the baseline)\n  Chosen on the SELECTION set, under the round-1 scope (routing by intent only), by full-text-only\n  full recall at k=7; ties go to the first listed (A, B, C, D).\n\n  Stage 2, structured scoping (decision 2). The scope is narrowed by facts from live order data\n  (app/retrieval/scope.py). Compared with the round-1 scope with retrieval held fixed.\n\n  Stage 3, fusion (R2). Candidates under the final scope, with the chosen lexical configuration:\n  vector-only, full-text-only, and hybrid with a full-text weight of 0.25, 0.5 or 1.0 (vector 1.0).\n  Hybrid is adopted ONLY IF its best weight strictly beats vector-only on selection full recall at\n  k=7; a tie goes to vector-only (the simpler system). The weight, if hybrid wins, is the best on\n  selection (ties to the larger).\n\n  Stage 4, k (R3). The smallest k in 3..10 at which the adopted system reaches full recall on at\n  least 15 of the 16 selection queries; if none, k is left at its previous value (7).\n\n  Diagnostics that choose NOTHING: a numeric-token probe set (does a lexical leg win when the query\n  contains the exact token?), a gift-card scoping-necessity set, miss attribution, scope coverage.",
+  "stage1_lexical_grid_S3": {
+    "A": {
+      "config": {
+        "form": "and",
+        "rank": "rank_cd",
+        "title_weight": true
+      },
+      "heldout": {
+        "full_recall": {
+          "fts_only": {
+            "10": 16,
+            "3": 11,
+            "4": 12,
+            "5": 12,
+            "6": 12,
+            "7": 12,
+            "8": 12,
+            "9": 13
+          },
+          "hybrid_w1.0": {
+            "10": 29,
+            "3": 9,
+            "4": 14,
+            "5": 21,
+            "6": 21,
+            "7": 25,
+            "8": 26,
+            "9": 28
+          },
+          "vector_only": {
+            "10": 29,
+            "3": 10,
+            "4": 14,
+            "5": 21,
+            "6": 21,
+            "7": 25,
+            "8": 26,
+            "9": 28
+          }
+        },
+        "queries": 32,
+        "random": {
+          "10": 13.16,
+          "3": 1.72,
+          "4": 2.72,
+          "5": 3.93,
+          "6": 5.35,
+          "7": 6.98,
+          "8": 8.83,
+          "9": 10.89
+        },
+        "scope_sizes": [
+          11,
+          22,
+          23,
+          36
+        ]
+      },
+      "selection": {
+        "full_recall": {
+          "fts_only": {
+            "10": 9,
+            "3": 6,
+            "4": 6,
+            "5": 6,
+            "6": 6,
+            "7": 6,
+            "8": 6,
+            "9": 8
+          },
+          "hybrid_w1.0": {
+            "10": 15,
+            "3": 6,
+            "4": 8,
+            "5": 10,
+            "6": 13,
+            "7": 14,
+            "8": 14,
+            "9": 15
+          },
+          "vector_only": {
+            "10": 15,
+            "3": 6,
+            "4": 8,
+            "5": 10,
+            "6": 13,
+            "7": 14,
+            "8": 14,
+            "9": 15
+          }
+        },
+        "queries": 16,
+        "random": {
+          "10": 6.58,
+          "3": 0.86,
+          "4": 1.36,
+          "5": 1.96,
+          "6": 2.67,
+          "7": 3.49,
+          "8": 4.41,
+          "9": 5.44
+        },
+        "scope_sizes": [
+          11,
+          22,
+          23,
+          36
+        ]
+      }
+    },
+    "B": {
+      "config": {
+        "form": "and_then_or",
+        "rank": "rank_cd",
+        "title_weight": true
+      },
+      "heldout": {
+        "full_recall": {
+          "fts_only": {
+            "10": 24,
+            "3": 13,
+            "4": 16,
+            "5": 21,
+            "6": 22,
+            "7": 22,
+            "8": 22,
+            "9": 22
+          },
+          "hybrid_w1.0": {
+            "10": 28,
+            "3": 14,
+            "4": 16,
+            "5": 19,
+            "6": 22,
+            "7": 22,
+            "8": 24,
+            "9": 24
+          },
+          "vector_only": {
+            "10": 29,
+            "3": 10,
+            "4": 14,
+            "5": 21,
+            "6": 21,
+            "7": 25,
+            "8": 26,
+            "9": 28
+          }
+        },
+        "queries": 32,
+        "random": {
+          "10": 13.16,
+          "3": 1.72,
+          "4": 2.72,
+          "5": 3.93,
+          "6": 5.35,
+          "7": 6.98,
+          "8": 8.83,
+          "9": 10.89
+        },
+        "scope_sizes": [
+          11,
+          22,
+          23,
+          36
+        ]
+      },
+      "selection": {
+        "full_recall": {
+          "fts_only": {
+            "10": 13,
+            "3": 11,
+            "4": 11,
+            "5": 12,
+            "6": 13,
+            "7": 13,
+            "8": 13,
+            "9": 13
+          },
+          "hybrid_w1.0": {
+            "10": 15,
+            "3": 8,
+            "4": 10,
+            "5": 12,
+            "6": 13,
+            "7": 13,
+            "8": 15,
+            "9": 15
+          },
+          "vector_only": {
+            "10": 15,
+            "3": 6,
+            "4": 8,
+            "5": 10,
+            "6": 13,
+            "7": 14,
+            "8": 14,
+            "9": 15
+          }
+        },
+        "queries": 16,
+        "random": {
+          "10": 6.58,
+          "3": 0.86,
+          "4": 1.36,
+          "5": 1.96,
+          "6": 2.67,
+          "7": 3.49,
+          "8": 4.41,
+          "9": 5.44
+        },
+        "scope_sizes": [
+          11,
+          22,
+          23,
+          36
+        ]
+      }
+    },
+    "C": {
+      "config": {
+        "form": "or",
+        "rank": "rank_cd",
+        "title_weight": true
+      },
+      "heldout": {
+        "full_recall": {
+          "fts_only": {
+            "10": 24,
+            "3": 14,
+            "4": 16,
+            "5": 21,
+            "6": 22,
+            "7": 22,
+            "8": 22,
+            "9": 22
+          },
+          "hybrid_w1.0": {
+            "10": 28,
+            "3": 14,
+            "4": 16,
+            "5": 19,
+            "6": 22,
+            "7": 22,
+            "8": 24,
+            "9": 24
+          },
+          "vector_only": {
+            "10": 29,
+            "3": 10,
+            "4": 14,
+            "5": 21,
+            "6": 21,
+            "7": 25,
+            "8": 26,
+            "9": 28
+          }
+        },
+        "queries": 32,
+        "random": {
+          "10": 13.16,
+          "3": 1.72,
+          "4": 2.72,
+          "5": 3.93,
+          "6": 5.35,
+          "7": 6.98,
+          "8": 8.83,
+          "9": 10.89
+        },
+        "scope_sizes": [
+          11,
+          22,
+          23,
+          36
+        ]
+      },
+      "selection": {
+        "full_recall": {
+          "fts_only": {
+            "10": 13,
+            "3": 11,
+            "4": 11,
+            "5": 12,
+            "6": 13,
+            "7": 13,
+            "8": 13,
+            "9": 13
+          },
+          "hybrid_w1.0": {
+            "10": 15,
+            "3": 8,
+            "4": 10,
+            "5": 12,
+            "6": 13,
+            "7": 13,
+            "8": 15,
+            "9": 15
+          },
+          "vector_only": {
+            "10": 15,
+            "3": 6,
+            "4": 8,
+            "5": 10,
+            "6": 13,
+            "7": 14,
+            "8": 14,
+            "9": 15
+          }
+        },
+        "queries": 16,
+        "random": {
+          "10": 6.58,
+          "3": 0.86,
+          "4": 1.36,
+          "5": 1.96,
+          "6": 2.67,
+          "7": 3.49,
+          "8": 4.41,
+          "9": 5.44
+        },
+        "scope_sizes": [
+          11,
+          22,
+          23,
+          36
+        ]
+      }
+    },
+    "D": {
+      "config": {
+        "form": "or",
+        "rank": "rank",
+        "title_weight": false
+      },
+      "heldout": {
+        "full_recall": {
+          "fts_only": {
+            "10": 20,
+            "3": 7,
+            "4": 9,
+            "5": 11,
+            "6": 12,
+            "7": 13,
+            "8": 14,
+            "9": 15
+          },
+          "hybrid_w1.0": {
+            "10": 24,
+            "3": 7,
+            "4": 9,
+            "5": 12,
+            "6": 15,
+            "7": 16,
+            "8": 18,
+            "9": 18
+          },
+          "vector_only": {
+            "10": 29,
+            "3": 10,
+            "4": 14,
+            "5": 21,
+            "6": 21,
+            "7": 25,
+            "8": 26,
+            "9": 28
+          }
+        },
+        "queries": 32,
+        "random": {
+          "10": 13.16,
+          "3": 1.72,
+          "4": 2.72,
+          "5": 3.93,
+          "6": 5.35,
+          "7": 6.98,
+          "8": 8.83,
+          "9": 10.89
+        },
+        "scope_sizes": [
+          11,
+          22,
+          23,
+          36
+        ]
+      },
+      "selection": {
+        "full_recall": {
+          "fts_only": {
+            "10": 11,
+            "3": 4,
+            "4": 4,
+            "5": 5,
+            "6": 5,
+            "7": 5,
+            "8": 7,
+            "9": 9
+          },
+          "hybrid_w1.0": {
+            "10": 12,
+            "3": 4,
+            "4": 4,
+            "5": 5,
+            "6": 8,
+            "7": 10,
+            "8": 12,
+            "9": 12
+          },
+          "vector_only": {
+            "10": 15,
+            "3": 6,
+            "4": 8,
+            "5": 10,
+            "6": 13,
+            "7": 14,
+            "8": 14,
+            "9": 15
+          }
+        },
+        "queries": 16,
+        "random": {
+          "10": 6.58,
+          "3": 0.86,
+          "4": 1.36,
+          "5": 1.96,
+          "6": 2.67,
+          "7": 3.49,
+          "8": 4.41,
+          "9": 5.44
+        },
+        "scope_sizes": [
+          11,
+          22,
+          23,
+          36
+        ]
+      }
+    }
+  },
+  "stage2_scoping": {
+    "S3_round1_scope": {
+      "heldout": {
+        "full_recall": {
+          "fts_only": {
+            "10": 24,
+            "3": 13,
+            "4": 16,
+            "5": 21,
+            "6": 22,
+            "7": 22,
+            "8": 22,
+            "9": 22
+          },
+          "hybrid_w0.25": {
+            "10": 28,
+            "3": 11,
+            "4": 16,
+            "5": 18,
+            "6": 21,
+            "7": 22,
+            "8": 26,
+            "9": 26
+          },
+          "hybrid_w0.5": {
+            "10": 28,
+            "3": 12,
+            "4": 16,
+            "5": 18,
+            "6": 20,
+            "7": 22,
+            "8": 26,
+            "9": 26
+          },
+          "hybrid_w1.0": {
+            "10": 28,
+            "3": 14,
+            "4": 16,
+            "5": 19,
+            "6": 22,
+            "7": 22,
+            "8": 24,
+            "9": 24
+          },
+          "vector_only": {
+            "10": 29,
+            "3": 10,
+            "4": 14,
+            "5": 21,
+            "6": 21,
+            "7": 25,
+            "8": 26,
+            "9": 28
+          }
+        },
+        "queries": 32,
+        "random": {
+          "10": 13.16,
+          "3": 1.72,
+          "4": 2.72,
+          "5": 3.93,
+          "6": 5.35,
+          "7": 6.98,
+          "8": 8.83,
+          "9": 10.89
+        },
+        "scope_sizes": [
+          11,
+          22,
+          23,
+          36
+        ]
+      },
+      "selection": {
+        "full_recall": {
+          "fts_only": {
+            "10": 13,
+            "3": 11,
+            "4": 11,
+            "5": 12,
+            "6": 13,
+            "7": 13,
+            "8": 13,
+            "9": 13
+          },
+          "hybrid_w0.25": {
+            "10": 15,
+            "3": 6,
+            "4": 9,
+            "5": 10,
+            "6": 13,
+            "7": 14,
+            "8": 14,
+            "9": 15
+          },
+          "hybrid_w0.5": {
+            "10": 16,
+            "3": 6,
+            "4": 9,
+            "5": 11,
+            "6": 13,
+            "7": 14,
+            "8": 14,
+            "9": 16
+          },
+          "hybrid_w1.0": {
+            "10": 15,
+            "3": 8,
+            "4": 10,
+            "5": 12,
+            "6": 13,
+            "7": 13,
+            "8": 15,
+            "9": 15
+          },
+          "vector_only": {
+            "10": 15,
+            "3": 6,
+            "4": 8,
+            "5": 10,
+            "6": 13,
+            "7": 14,
+            "8": 14,
+            "9": 15
+          }
+        },
+        "queries": 16,
+        "random": {
+          "10": 6.58,
+          "3": 0.86,
+          "4": 1.36,
+          "5": 1.96,
+          "6": 2.67,
+          "7": 3.49,
+          "8": 4.41,
+          "9": 5.44
+        },
+        "scope_sizes": [
+          11,
+          22,
+          23,
+          36
+        ]
+      }
+    },
+    "S4_structured_scope": {
+      "heldout": {
+        "full_recall": {
+          "fts_only": {
+            "10": 32,
+            "3": 19,
+            "4": 24,
+            "5": 30,
+            "6": 30,
+            "7": 31,
+            "8": 32,
+            "9": 32
+          },
+          "hybrid_w0.25": {
+            "10": 32,
+            "3": 14,
+            "4": 19,
+            "5": 25,
+            "6": 26,
+            "7": 29,
+            "8": 31,
+            "9": 32
+          },
+          "hybrid_w0.5": {
+            "10": 32,
+            "3": 16,
+            "4": 21,
+            "5": 24,
+            "6": 27,
+            "7": 29,
+            "8": 31,
+            "9": 32
+          },
+          "hybrid_w1.0": {
+            "10": 32,
+            "3": 17,
+            "4": 21,
+            "5": 25,
+            "6": 27,
+            "7": 29,
+            "8": 31,
+            "9": 32
+          },
+          "vector_only": {
+            "10": 32,
+            "3": 13,
+            "4": 17,
+            "5": 25,
+            "6": 28,
+            "7": 29,
+            "8": 32,
+            "9": 32
+          }
+        },
+        "queries": 32,
+        "random": {
+          "10": 23.91,
+          "3": 12.6,
+          "4": 13.34,
+          "5": 14.47,
+          "6": 16.07,
+          "7": 18.19,
+          "8": 20.92,
+          "9": 22.33
+        },
+        "scope_sizes": [
+          2,
+          3,
+          8,
+          14
+        ]
+      },
+      "selection": {
+        "full_recall": {
+          "fts_only": {
+            "10": 16,
+            "3": 11,
+            "4": 11,
+            "5": 13,
+            "6": 14,
+            "7": 15,
+            "8": 16,
+            "9": 16
+          },
+          "hybrid_w0.25": {
+            "10": 16,
+            "3": 6,
+            "4": 9,
+            "5": 11,
+            "6": 15,
+            "7": 16,
+            "8": 16,
+            "9": 16
+          },
+          "hybrid_w0.5": {
+            "10": 16,
+            "3": 6,
+            "4": 10,
+            "5": 12,
+            "6": 15,
+            "7": 16,
+            "8": 16,
+            "9": 16
+          },
+          "hybrid_w1.0": {
+            "10": 16,
+            "3": 8,
+            "4": 10,
+            "5": 14,
+            "6": 15,
+            "7": 16,
+            "8": 16,
+            "9": 16
+          },
+          "vector_only": {
+            "10": 16,
+            "3": 6,
+            "4": 9,
+            "5": 11,
+            "6": 14,
+            "7": 16,
+            "8": 16,
+            "9": 16
+          }
+        },
+        "queries": 16,
+        "random": {
+          "10": 11.96,
+          "3": 6.3,
+          "4": 6.67,
+          "5": 7.24,
+          "6": 8.03,
+          "7": 9.1,
+          "8": 10.46,
+          "9": 11.16
+        },
+        "scope_sizes": [
+          2,
+          3,
+          8,
+          14
+        ]
+      }
+    },
+    "noncore_slots_hybrid_w1.0_k7": {
+      "S3_heldout": {
+        "non_core": 107,
+        "slots": 224
+      },
+      "S3_selection": {
+        "non_core": 51,
+        "slots": 112
+      },
+      "S4_heldout": {
+        "non_core": 32,
+        "slots": 168
+      },
+      "S4_selection": {
+        "non_core": 15,
+        "slots": 84
+      }
+    }
+  }
+}
