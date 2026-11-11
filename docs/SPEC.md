@@ -282,11 +282,11 @@ Checked 2026-11-10 against PyPI JSON metadata (wheel filenames) and the Hugging 
 
 Embedding runtime decision: ONNX Runtime + tokenizers + numpy (plus tokenizers' transitive huggingface-hub tree, about a dozen small packages) is well under 100 MB of wheels plus the 133 MB model, versus several hundred MB to over a gigabyte for torch. The earlier "about 40 MB" figure ignored the transitive packages; see the tokenizers row. A hand-written WordPiece tokenizer would remove that tree and is **rejected**; see section 9.1. Approved by the PM; the embedder sits behind an interface local to `app/retrieval/embedder.py`.
 
-The backend image built locally on amd64 at 317 MB before the embedder, and **296 MB compressed / 795 MB uncompressed with the embedder and model** (details in 9.1; measured 2026-11-11). The Dockerfile contains nothing architecture-specific, but it has not been built on arm64.
+The backend image built locally on amd64 at 317 MB before the embedder, and **230 MB compressed / 582 MB uncompressed with the embedder, model and policy corpus** (details in 9.1; re-measured 2026-11-11 after setting `UV_NO_CACHE=1`; it was 296 MB / 795 MB before). The Dockerfile contains nothing architecture-specific, but it has not been built on arm64.
 
 | Image | Size (amd64, 2026-11-11) | arm64 evidence |
 |---|---|---|
-| `support-backend` (app + onnxruntime + tokenizers + numpy + bge-small ONNX model) | 296 MB compressed, 795 MB uncompressed | not built on arm64; every dependency row above has an aarch64 wheel, the base images list `linux/arm64`, and the model file is architecture-independent. Native verification is the OCI build at M4. |
+| `support-backend` (app + onnxruntime + tokenizers + numpy + bge-small ONNX model) | 230 MB compressed, 582 MB uncompressed | not built on arm64; every dependency row above has an aarch64 wheel, the base images list `linux/arm64`, and the model file is architecture-independent. Native verification is the OCI build at M4. |
 
 ### 9.1 Decision: keep `tokenizers`; do not hand-write a tokenizer (PM, 2026-11-10)
 
@@ -296,11 +296,11 @@ The backend image built locally on amd64 at 317 MB before the embedder, and **29
 - **Revisit only on a measured problem**, such as the OCI instance actually running short of disk.
 - **`httpx2`:** a transitive dependency is acceptable. Project code must not import `httpx2` or `httpcore2`; `backend/tests/unit/test_import_boundaries.py` fails if any module under `app/` does, so the boundary is enforced by CI rather than remembered.
 - **Image size with the embedder (measured 2026-11-11, linux/amd64 only):** the Dockerfile fetches and verifies the pinned model during the build (fails on a SHA-256 mismatch). The build succeeded, and inside the container the embedder loaded and returned a 384-dimension vector as the non-root user. Sizes, by method (they differ and are not interchangeable):
-  - **Compressed content size: 296 MB** (`docker image inspect .Size`). The comparable figure to the 317 MB pre-embedder baseline *if* that was measured the same way; the earlier measurement method was not recorded, so the two are not strictly comparable.
-  - **Uncompressed filesystem: 795 MB** (`du -sx /` as root). Layers: base OS 85 MB, python 55 MB, uv binary 58 MB, dependencies 480 MB, model 134 MB.
-  - `docker image ls` reports 1.11 GB under Docker Desktop's containerd store; that figure includes accounting that does not match the layer sizes and is not used here.
-  - **Known waste, not yet fixed:** about 208 MB of the dependency layer is uv's download cache in `/root/.cache/uv` (`UV_NO_CACHE=1` or `--no-cache` would drop it). The model (134 MB) is about 17 percent of the uncompressed image.
-  - The image does not contain `policies/`, so the ingest CLI cannot run inside it as built. Ingestion is currently a host-side step.
+  - **Current (after `UV_NO_CACHE=1` and adding `policies/`): 230 MB compressed** (`docker image inspect .Size`) and **582 MB uncompressed** (`du -sx /` as root). Layers: base OS 85 MB, python 55 MB, uv binary 58 MB, dependencies 264 MB, model 134 MB, policies 41 kB. The earlier 317 MB pre-embedder baseline used a measurement method that was not recorded, so it is not strictly comparable to either figure.
+  - **Before the fix (first measurement):** 296 MB compressed, 795 MB uncompressed. About 208 MB of the dependency layer was uv's download cache in `/root/.cache/uv`; it is gone (`/root/.cache` no longer exists in the image). The model (134 MB) is now about 23 percent of the uncompressed image.
+  - `docker image ls` reports a larger figure under Docker Desktop's containerd store (1.11 GB for the first build); it does not match the layer sizes and is not used here.
+  - **Policy corpus in the image:** `policies/` is passed as a named build context (`--build-context policies=./policies`; `docker-compose.yml` sets `additional_contexts`) and copied to `/policies`, where the loader's `<parents[3]>/policies` lookup finds it. A named context was chosen over widening the build context to the repo root so that the repo root, including untracked files such as private keys, is never sent to the daemon. Verified: `python -m app.retrieval.ingest` runs inside the container against the dev database and reports `chunks_unchanged=19`.
+  - **Gap found, not fixed:** the image does not contain `alembic.ini` or `alembic/`, so migrations cannot run from the image. The M4 deployment needs a decision (copy them in, or run migrations from a separate one-shot image).
 
 ## 10. Response path and explanation correctness
 

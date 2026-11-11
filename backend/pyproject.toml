@@ -46,7 +46,7 @@ select = ["E", "F", "I", "B", "UP", "S"]
 [tool.mypy]
 strict = true
 python_version = "3.12"
-files = ["app", "tests"]
+files = ["app", "tests", "alembic"]
 # scripts/ holds one-off tooling that runs in a throwaway env (needs torch); excluded so bare
 # `mypy .` and `uv run mypy` check the same thing.
 exclude = ["^scripts/"]

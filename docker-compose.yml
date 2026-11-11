@@ -20,7 +20,10 @@ services:
       retries: 10
 
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      additional_contexts:
+        policies: ./policies
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-support}:${POSTGRES_PASSWORD:-support}@db:5432/${POSTGRES_DB:-support}
       LLM_PROVIDER: ${LLM_PROVIDER:-fake}
