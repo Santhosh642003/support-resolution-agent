@@ -34,6 +34,7 @@ from app.providers.base import (
     LLMRequest,
     LLMResponse,
     NativeJson,
+    OutputTruncated,
     ProviderTimeout,
     ProviderUnavailable,
     QuotaExhausted,
@@ -46,6 +47,7 @@ from app.providers.structured import (
     parse_and_validate,
     repair_request,
     schema_json,
+    strict_json_schema,
     with_schema_instructions,
 )
 
@@ -90,7 +92,8 @@ class LLMClient:
         engine: Engine | None = None,
         cache_mode: CacheMode = CacheMode.READ_WRITE,
         limiter: RateLimiter | None = None,
-        daily_cap: int | None = None,
+        daily_request_cap: int | None = None,
+        daily_token_cap: int | None = None,
         retry: RetryPolicy | None = None,
         native_json: NativeJson = "none",
         max_repairs: int = 1,
@@ -100,13 +103,17 @@ class LLMClient:
     ) -> None:
         if cache_mode is not CacheMode.OFF and engine is None:
             raise ValueError("a cache (read_write or replay_only) needs a database engine")
-        if daily_cap is not None and engine is None:
+        if (daily_request_cap is not None or daily_token_cap is not None) and engine is None:
             raise ValueError("a persisted daily cap needs a database engine")
         self.adapter = adapter
         self._engine = engine
         self._cache = LLMCache(engine, cache_mode) if engine is not None else None
         self._limiter = limiter
-        self._quota = DailyQuota(engine, adapter.name, daily_cap) if engine is not None else None
+        self._quota = (
+            DailyQuota(engine, adapter.name, daily_request_cap, daily_token_cap)
+            if engine is not None
+            else None
+        )
         self._retry = retry or RetryPolicy()
         self._native_json = native_json
         self._max_repairs = max_repairs
@@ -132,7 +139,9 @@ class LLMClient:
         shaped = with_schema_instructions(req, schema).model_copy(
             update={
                 "native_json": native,
-                "native_schema": schema.model_json_schema() if native == "json_schema" else None,
+                "native_schema": strict_json_schema(schema.model_json_schema())
+                if native == "json_schema"
+                else None,
             }
         )
         key = cache_key(
@@ -254,7 +263,9 @@ class LLMClient:
             attempt += 1
             state.transport += 1
             if self._quota is not None:
-                self._quota.reserve()  # QuotaExhausted propagates: never retried
+                # Local budget is the PRIMARY quota control: refuse before calling. Raises
+                # QuotaExhausted, which is never retried.
+                self._quota.reserve(estimate)
             if self._limiter is not None:
                 self._limiter.acquire(estimate)
             t0 = self._perf()
@@ -262,9 +273,11 @@ class LLMClient:
                 resp = self.adapter.complete(req)
             except QuotaExhausted:
                 state.model_s += self._perf() - t0
+                self._refund(estimate)
                 raise
             except (RateLimited, ProviderTimeout, ProviderUnavailable) as exc:
                 state.model_s += self._perf() - t0
+                self._refund(estimate)
                 retry_after = exc.retry_after_s if isinstance(exc, RateLimited) else None
                 delay = self._retry.delay(attempt, retry_after, self._rng)
                 out_of_attempts = attempt >= self._retry.max_attempts
@@ -273,10 +286,30 @@ class LLMClient:
                     raise
                 self._sleep(delay)
                 continue
+            except LLMError:
+                state.model_s += self._perf() - t0
+                self._refund(estimate)
+                raise
             state.model_s += self._perf() - t0
+            actual = resp.usage.total_tokens
             if self._limiter is not None:
-                self._limiter.settle(estimate, resp.usage.total_tokens)
+                self._limiter.settle(estimate, actual)
+            if self._quota is not None:
+                self._quota.settle(estimate, actual)
+            if resp.finish_reason == "length" and not resp.text.strip() and not resp.tool_calls:
+                # The model spent its whole cap (reasoning tokens count against it) and said
+                # nothing. This is a failure to surface, never an answer and never a silent retry.
+                raise OutputTruncated(
+                    "the reply was empty and finish_reason was 'length': the completion cap "
+                    "was consumed before any visible output (raise max_tokens)"
+                )
             return resp
+
+    def _refund(self, estimate: int) -> None:
+        """A failed call produced no tokens: return the token reservation (the request still
+        counts, conservatively)."""
+        if self._quota is not None:
+            self._quota.settle(estimate, 0)
 
     def _finish(
         self,

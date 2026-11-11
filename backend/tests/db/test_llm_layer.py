@@ -203,12 +203,12 @@ def test_entries_are_immutable_and_the_first_sampling_wins(engine: Engine) -> No
 
 def test_daily_counter_stops_exactly_at_the_cap_and_survives_a_restart(engine: Engine) -> None:
     provider = f"q-{uuid.uuid4().hex[:12]}"
-    q = DailyQuota(engine, provider, cap=3)
+    q = DailyQuota(engine, provider, request_cap=3)
     assert [q.reserve(), q.reserve(), q.reserve()] == [1, 2, 3]
-    with pytest.raises(QuotaExhausted, match="exhausted"):
+    with pytest.raises(QuotaExhausted, match="would be exceeded"):
         q.reserve()
-    restarted = DailyQuota(engine, provider, cap=3)  # a new process sees the same count
-    assert restarted.used_today() == 3
+    restarted = DailyQuota(engine, provider, request_cap=3)  # a new process sees the same count
+    assert restarted.used_today()[0] == 3
     with pytest.raises(QuotaExhausted):
         restarted.reserve()
 
@@ -232,15 +232,17 @@ def test_concurrent_reservations_can_never_overspend_the_cap(engine: Engine) -> 
     for t in threads:
         t.join()
     assert results.count("ok") == cap and results.count("refused") == 11
-    assert DailyQuota(engine, provider, cap).used_today() == cap
+    assert DailyQuota(engine, provider, cap).used_today()[0] == cap
 
 
 def test_exhausted_quota_fails_the_call_honestly_and_the_adapter_is_never_reached(
     engine: Engine,
 ) -> None:
     a = scripted([reply("must never be returned")])
-    c = make_client(engine, a, daily_cap=1)
-    DailyQuota(engine, a.name, cap=1).reserve()  # someone already used the day's only request
+    c = make_client(engine, a, daily_request_cap=1)
+    DailyQuota(
+        engine, a.name, request_cap=1
+    ).reserve()  # someone already used the day's only request
     result = None
     with pytest.raises(QuotaExhausted) as exc:
         result = c.complete(unique_request())
@@ -254,7 +256,7 @@ def test_exhausted_quota_fails_the_call_honestly_and_the_adapter_is_never_reache
 def test_quota_exhaustion_midway_through_a_case_fails_the_second_call(engine: Engine) -> None:
     """Extraction succeeds, explanation hits the daily cap: the case is failed, not faked."""
     a = scripted([reply(GOOD), reply("explanation must not exist")])
-    c = make_client(engine, a, daily_cap=1)
+    c = make_client(engine, a, daily_request_cap=1)
     budget = CallBudget(2)
     first = c.complete_structured(unique_request(), Intent, budget=budget)
     assert first.parsed.intent == "order_status"
@@ -265,15 +267,15 @@ def test_quota_exhaustion_midway_through_a_case_fails_the_second_call(engine: En
 
 def test_a_cache_hit_costs_no_quota(engine: Engine) -> None:
     a = scripted([reply("answer")])
-    c, req = make_client(engine, a, daily_cap=1), unique_request()
+    c, req = make_client(engine, a, daily_request_cap=1), unique_request()
     c.complete(req)  # spends the day's single request
     assert c.complete(req).text == "answer"  # served from cache: the limiter is never consulted
-    assert DailyQuota(engine, a.name, 1).used_today() == 1 and a.calls == 1
+    assert DailyQuota(engine, a.name, 1).used_today()[0] == 1 and a.calls == 1
 
 
 def test_transport_retries_each_count_against_the_daily_quota(engine: Engine) -> None:
     from app.providers.base import RateLimited
 
     a = scripted([RateLimited("x"), RateLimited("x"), reply("ok")])
-    make_client(engine, a, daily_cap=10).complete(unique_request())
-    assert DailyQuota(engine, a.name, 10).used_today() == 3
+    make_client(engine, a, daily_request_cap=10).complete(unique_request())
+    assert DailyQuota(engine, a.name, 10).used_today()[0] == 3

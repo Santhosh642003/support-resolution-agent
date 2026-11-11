@@ -18,6 +18,40 @@ def schema_json(schema: type[BaseModel]) -> str:
     return json.dumps(schema.model_json_schema(), sort_keys=True, separators=(",", ":"))
 
 
+# Keywords strict mode does not accept (or that mean nothing once everything is required).
+_STRICT_DROP = ("default",)
+
+
+def strict_json_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """Post-process a Pydantic JSON Schema into what a provider's STRICT structured-output mode
+    requires: every object gets `additionalProperties: false` and lists ALL its properties as
+    `required`. Optional fields stay expressible because Pydantic already types them as
+    `anyOf [T, null]`; they become required-but-nullable here, and our own Pydantic validation
+    (which still treats them as optional) remains the contract. Works through `$defs`, `anyOf`,
+    `items` and nested objects. Does not mutate its input. Measured against the provider on
+    2026-11-11 (SPEC 4.0.2): the unmodified Pydantic schema is rejected with HTTP 400; this
+    shape was accepted 20/20.
+    """
+    out: dict[str, Any] = json.loads(json.dumps(schema))
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            for key in _STRICT_DROP:
+                node.pop(key, None)
+            props = node.get("properties")
+            if node.get("type") == "object" or isinstance(props, dict):
+                node["additionalProperties"] = False
+                node["required"] = list(props) if isinstance(props, dict) else []
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    walk(out)
+    return out
+
+
 def with_schema_instructions(req: LLMRequest, schema: type[BaseModel]) -> LLMRequest:
     """Append the contract to the conversation as a system message. Untrusted text (customer
     messages, retrieved policy) stays in its own messages; this message only carries the format."""

@@ -46,12 +46,15 @@ def build_adapter(settings: Settings) -> LLMProvider:
 
 
 def build_client(settings: Settings, engine: Engine | None) -> LLMClient:
+    adapter = build_adapter(settings)
+    real = settings.llm_provider != "fake"  # the fake adapter needs no throttling or quota
+    limited = real and bool(settings.llm_rpm or settings.llm_tpm)
     return LLMClient(
-        build_adapter(settings),
+        adapter,
         engine=engine,
         cache_mode=CacheMode(settings.llm_cache_mode) if engine is not None else CacheMode.OFF,
-        limiter=RateLimiter(settings.llm_rpm, settings.llm_tpm)
-        if (settings.llm_rpm or settings.llm_tpm)
-        else None,
-        daily_cap=settings.llm_rpd,
+        limiter=RateLimiter(settings.llm_rpm, settings.llm_tpm) if limited else None,
+        daily_request_cap=settings.llm_rpd if (real and engine is not None) else None,
+        daily_token_cap=settings.llm_tpd if (real and engine is not None) else None,
+        native_json=settings.llm_native_json,
     )

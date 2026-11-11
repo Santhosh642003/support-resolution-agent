@@ -165,6 +165,11 @@ class CacheMiss(LLMError):
     """replay_only mode and the cache has no entry. The call is NOT made."""
 
 
+class OutputTruncated(LLMError):
+    """Empty reply with finish_reason 'length': reasoning consumed the whole completion cap.
+    A failure that must surface; it is never retried silently and never cached."""
+
+
 class CallBudgetExceeded(LLMError):
     """The per-case LLM call budget (2) would be exceeded. Fails closed."""
 

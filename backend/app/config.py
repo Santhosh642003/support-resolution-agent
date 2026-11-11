@@ -25,11 +25,19 @@ class Settings(BaseSettings):
     # FakeAdapter fixtures (scenario ID + step index), and the manual RECORD=1 mode.
     llm_fixtures_dir: str | None = None
     llm_record: bool = Field(default=False, validation_alias=AliasChoices("RECORD", "LLM_RECORD"))
+    # Provider limits. Version-controlled DEFAULTS (visible in CI); .env overrides them. From the
+    # measured free-tier limits (30 RPM, 1000 RPD, 8000 TPM, 200000 TPD; SPEC 4.0.2) with
+    # headroom, chosen by PM 2026-11-11. None disables a limit. Real providers only.
+    llm_rpm: int | None = 25
+    llm_tpm: int | None = 7000
+    llm_rpd: int | None = 900
+    llm_tpd: int | None = 180000
     llm_cache_mode: Literal["read_write", "replay_only", "off"] = "read_write"
-    # Free-tier limits change and live in config, not code. None = unlimited/unknown.
-    llm_rpm: int | None = None
-    llm_tpm: int | None = None
-    llm_rpd: int | None = None
+    # Native structured-output hint. Only a hint: our own parse/validate always runs.
+    llm_native_json: Literal["none", "json_object", "json_schema"] = "json_object"
+    # Completion cap for the explanation call. Reasoning tokens count against it, so a small cap
+    # yields an EMPTY reply (finish_reason 'length'), which is treated as a failure.
+    llm_explanation_max_tokens: int = 1500
     # PROJECTED cost per 1k tokens (a paid-tier estimate, never incurred cost).
     llm_price_per_1k_in: float = 0.0
     llm_price_per_1k_out: float = 0.0

@@ -138,45 +138,99 @@ class RetryPolicy:
 
 
 class DailyQuota:
-    """Persisted daily request counter. One row per (provider, UTC day); the increment is a
-    single conditional UPSERT, so concurrent processes cannot both take the last slot."""
+    """Persisted daily counters for requests AND tokens, one row per (provider, UTC day).
 
-    def __init__(self, engine: Engine, provider: str, cap: int | None) -> None:
+    This is the PRIMARY quota control. A call that would exceed the local budget is refused
+    before it is made, so the provider's own daily limit is something we approach but never
+    rely on detecting (parsing a daily-limit 429 is only a secondary, unverified signal).
+
+    Tokens are reserved up front from an estimate and settled to the provider-reported usage
+    afterwards. The reservation is one conditional UPSERT, so concurrent processes cannot
+    overspend either counter. It is deliberately conservative: near the cap a call whose
+    estimate does not fit is refused even if its real usage would have.
+    """
+
+    def __init__(
+        self,
+        engine: Engine,
+        provider: str,
+        request_cap: int | None,
+        token_cap: int | None = None,
+    ) -> None:
         self._engine = engine
         self._provider = provider
-        self._cap = cap
+        self._request_cap = request_cap
+        self._token_cap = token_cap
 
-    def reserve(self) -> int:
-        """Count one request against today's cap. Raises QuotaExhausted at the cap. Commits in
-        its own transaction so the count survives a rollback of the caller's work."""
-        if self._cap is None:
+    @property
+    def enabled(self) -> bool:
+        return self._request_cap is not None or self._token_cap is not None
+
+    def reserve(self, est_tokens: int = 0) -> int:
+        """Count one request and reserve `est_tokens` against today's caps. Raises
+        QuotaExhausted if either cap would be exceeded. Commits in its own transaction so the
+        count survives a rollback of the caller's work. Returns the requests used today."""
+        if not self.enabled:
             return 0
+        if self._token_cap is not None and est_tokens > self._token_cap:
+            raise QuotaExhausted(
+                f"a single request (estimated {est_tokens} tokens) exceeds the daily token "
+                f"budget for {self._provider} ({self._token_cap})"
+            )
+        if self._request_cap is not None and self._request_cap < 1:
+            raise QuotaExhausted(f"daily request budget for {self._provider} is zero")
         with self._engine.begin() as conn:
             used = conn.execute(
                 text(
-                    "INSERT INTO llm_usage_daily (provider, day, requests)"
-                    " VALUES (:p, (clock_timestamp() AT TIME ZONE 'UTC')::date, 1)"
+                    "INSERT INTO llm_usage_daily (provider, day, requests, tokens)"
+                    " VALUES (:p, (clock_timestamp() AT TIME ZONE 'UTC')::date, 1, :est)"
                     " ON CONFLICT (provider, day) DO UPDATE"
-                    " SET requests = llm_usage_daily.requests + 1"
-                    " WHERE llm_usage_daily.requests < :cap RETURNING requests"
+                    " SET requests = llm_usage_daily.requests + 1,"
+                    "     tokens = llm_usage_daily.tokens + :est"
+                    " WHERE (CAST(:rcap AS integer) IS NULL OR llm_usage_daily.requests < :rcap)"
+                    "   AND (CAST(:tcap AS bigint) IS NULL"
+                    "        OR llm_usage_daily.tokens + :est <= :tcap)"
+                    " RETURNING requests"
                 ),
-                {"p": self._provider, "cap": self._cap},
+                {
+                    "p": self._provider,
+                    "est": est_tokens,
+                    "rcap": self._request_cap,
+                    "tcap": self._token_cap,
+                },
             ).scalar_one_or_none()
         if used is None:
+            requests, tokens = self.used_today()
             raise QuotaExhausted(
-                f"daily request quota for {self._provider} is exhausted "
-                f"(configured cap {self._cap}); resets at 00:00 UTC"
+                f"daily quota for {self._provider} would be exceeded "
+                f"(requests {requests}/{self._request_cap}, tokens {tokens}/{self._token_cap}, "
+                f"this call needs ~{est_tokens}); resets at 00:00 UTC"
             )
         return int(used)
 
-    def used_today(self) -> int:
-        with self._engine.connect() as conn:
-            return int(
-                conn.execute(
-                    text(
-                        "SELECT coalesce(max(requests), 0) FROM llm_usage_daily WHERE provider = :p"
-                        " AND day = (clock_timestamp() AT TIME ZONE 'UTC')::date"
-                    ),
-                    {"p": self._provider},
-                ).scalar_one()
+    def settle(self, est_tokens: int, actual_tokens: int | None) -> None:
+        """Replace the reservation with what the provider reported (None = keep the estimate;
+        0 = the call produced nothing, e.g. it failed, so the reservation is returned)."""
+        if not self.enabled or actual_tokens is None or actual_tokens == est_tokens:
+            return
+        with self._engine.begin() as conn:
+            conn.execute(
+                text(
+                    "UPDATE llm_usage_daily SET tokens = greatest(tokens + :delta, 0)"
+                    " WHERE provider = :p AND day = (clock_timestamp() AT TIME ZONE 'UTC')::date"
+                ),
+                {"p": self._provider, "delta": actual_tokens - est_tokens},
             )
+
+    def used_today(self) -> tuple[int, int]:
+        """(requests, tokens) used so far today (UTC)."""
+        with self._engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    "SELECT coalesce(max(requests), 0) AS n_req, coalesce(max(tokens), 0) AS n_tok"
+                    " FROM llm_usage_daily WHERE provider = :p"
+                    " AND day = (clock_timestamp() AT TIME ZONE 'UTC')::date"
+                ),
+                {"p": self._provider},
+            ).one()
+        return int(row.n_req), int(row.n_tok)

@@ -29,6 +29,11 @@ DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
 DEFAULT_MODEL = "openai/gpt-oss-120b"  # a default only; LLM_MODEL overrides it
 
 _TRY_AGAIN = re.compile(r"try again in\s+(?:(\d+)m)?\s*([\d.]+)s", re.IGNORECASE)
+# UNVERIFIED INFERENCE, NOT LOAD-BEARING. The daily-limit 429 body was never observed (provoking it
+# would have spent the whole day's allowance); this pattern guesses it from the wording of the
+# per-minute errors that WERE observed ("... on requests per minute (RPM) ..."). The primary quota
+# control is the local persisted counter (DailyQuota), which refuses a call before it is made. This
+# parsing is only a secondary signal for the case where the provider disagrees with our counter.
 _DAILY = re.compile(r"per day|\((?:rpd|tpd)\)", re.IGNORECASE)
 
 
@@ -57,7 +62,7 @@ def _retry_after_s(resp: httpx.Response, message: str) -> float | None:
 
 class GroqAdapter:
     name = "groq"
-    capabilities = AdapterCapabilities(json_mode=True, json_schema=False, tool_calling=True)
+    capabilities = AdapterCapabilities(json_mode=True, json_schema=True, tool_calling=True)
 
     def __init__(
         self,
