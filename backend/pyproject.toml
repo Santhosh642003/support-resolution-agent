@@ -41,7 +41,8 @@ select = ["E", "F", "I", "B", "UP", "S"]
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "E501"]
 "alembic/versions/*" = ["E501"]  # embedded SQL
-"scripts/*" = ["S101", "E501", "T201"]  # one-off tooling run outside the project env
+"scripts/*" = ["S101", "E501", "T201"]
+"app/providers/smoke.py" = ["S101", "E501", "T201"]  # manual smoke tool, never run in CI  # one-off tooling run outside the project env
 
 [tool.mypy]
 strict = true

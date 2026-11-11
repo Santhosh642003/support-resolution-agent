@@ -8,7 +8,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        # the repo-root .env is found whether the process starts in the repo root or in backend/
+        env_file=("../.env", ".env"),
+        extra="ignore",
+    )
 
     environment: Literal["dev", "test", "prod"] = "dev"
     database_url: str = "postgresql+psycopg://support:support@127.0.0.1:5432/support"

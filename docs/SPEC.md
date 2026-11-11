@@ -153,6 +153,50 @@ Llama Prompt Guard 2 is defense in depth and a **measurement layer**. It is neve
 - **Placement by trust, not by time:** classify text by whether it is attacker-influenced and whether it changes. (1) Policy documents, static and authored by us: scan **once at ingestion** and store the verdict with the chunk (`policy_chunks.injection_verdict`); never per request. (2) The customer message in the current turn: scan **per request**. (3) Any customer-writable field that later gets retrieved (order notes, profile text): scan **at write time AND keep treating it as untrusted at read time**; a stored clean verdict is never a reason to trust it later. Batch where the API allows.
 - It sits behind the same provider interface and adapter layer (a `classify_injection` method), with a Fake implementation for CI.
 
+### 4.0.2 Measured provider behavior (Groq smoke test, 2026-11-11, `openai/gpt-oss-120b`)
+
+Run by `python -m app.providers.smoke <step>` (manual, never in CI). Every number below is recorded in `docs/smoke/groq-smoke.json` (organisation id redacted). Scale: about 500 requests of a 1000-per-day allowance. The free tier is a measurement target, not a guarantee; limits and behavior change.
+
+1. **Models available** (`GET /models`, 11): `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `openai/gpt-oss-safeguard-20b`, `qwen/qwen3.8-27b`, `allam-2-7b`, `meta-llama/llama-prompt-guard-2-86m`, `meta-llama/llama-prompt-guard-2-22m`, two `canopylabs/orpheus` TTS models, two Whisper models. Context 131072 tokens, max completion 65536, for the three gpt-oss models. Two models are new since 2026-11-10 (`allam-2-7b`, `gpt-oss-safeguard-20b`).
+   **Limits, from the Groq console (Settings > Limits), organization level:**
+
+   | Model | RPM | RPD | TPM | TPD |
+   |---|---|---|---|---|
+   | gpt-oss-120b, gpt-oss-20b, qwen3.8-27b | 30 | 1,000 | 8,000 | **200,000** |
+   | gpt-oss-safeguard-20b | 3 | 1,000 | 2,000 | 200,000 |
+   | llama-prompt-guard-2 (22m, 86m) | 30 | 14,400 | 15,000 | 500,000 |
+
+   Response headers agree with the console for the two they expose (`x-ratelimit-limit-requests: 1000`, `x-ratelimit-limit-tokens: 8000`); RPM and TPD appear only in the console. **The binding constraint is tokens per day (200K), not requests.** At about 1.5K tokens per case (item 7) that is roughly 130 cases a day, so a 100-case evaluation run consumes most of a day's token allowance live. This is what the cache and `replay_only` are for.
+2. **Tool calling** (single tool, `tool_choice` forced to it, 50 runs over 10 varied messages including an injection attempt): **50/50 valid** (arguments parse as JSON and validate against the schema), 0 failures, 0 needing a transport retry. Median model latency 0.50 s, max 1.09 s. This is one tool and one schema; it says nothing about several tools or `tool_choice: auto`.
+3. **JSON modes** (20 runs each, same schema): prompt-only (schema in the prompt, our parser) 20/20 valid and bare JSON; `response_format: json_object` 20/20; our full contract `complete_structured` 20/20 on the first completion (no repair needed). **Strict `json_schema` works, but only with a strict-compatible schema:** with Pydantic's default schema it returns HTTP 400 ("`additionalProperties:false` must be set on every object"); after setting `additionalProperties:false` and listing every property as required it was 20/20 valid. Two further gotchas: `json_object` returns HTTP 400 unless the word "json" appears in the messages, and reasoning tokens count against the completion cap (see items 5 and 7). The adapter keeps `json_schema` capability **off** until a strict-schema helper exists; the contract in our code does not depend on any of this.
+4. **429 and 413 behavior.** Provoked with an unthrottled burst (45 simultaneous requests: 15 succeeded, 30 returned 429). The per-minute 429 carries a **`retry-after` header** (`2`, seconds) and a body `{"error": {"message": "Rate limit reached for model ... on requests per minute (RPM): Limit 30, Used 30, Requested 1. Please try again in 2s. ...", "type": "requests", "code": "rate_limit_exceeded"}}`; the window is named in parentheses (RPM/TPM). A single request larger than the per-minute token limit returns **HTTP 413** (not 429) with `on tokens per minute (TPM): Limit 8000, Requested 12082` and `type: tokens`, which the adapter maps to `RequestTooLarge` (never retried). **The daily-limit (RPD/TPD) error body was NOT observed**: provoking it would have meant spending the whole day's allowance. The adapter classifies a 429 as daily when its message contains `per day`, `(RPD)` or `(TPD)`, following the naming pattern of the observed errors; that is an inference, unverified, and is the first thing to check if a daily 429 is ever seen. Groq's rate-limit documentation says `retry-after` appears only on 429 responses and does not show an error body.
+5. **Usage accounting.** `usage` was present and complete on all 9 calls checked in the final run (prompt, completion, total and `completion_tokens_details.reasoning_tokens`), and `total = prompt + completion` held every time. It was also present on the earlier runs, but those did not record per-call completeness, so the claim rests on these 9 calls. Two practical points: there is a fixed overhead of about 100 prompt tokens per call (a one-word message cost 107), so the `chars / 4` pre-call estimate underestimates short prompts (measured 1.6 to 3.5 characters per token); and **about half of completion tokens are reasoning** (84 of 177, 254 of 304), counted against the same cap.
+6. **Determinism (temperature 0, 20 runs each).** The cache design's near-determinism assumption **does not hold for prose, and holds only partly for short JSON**:
+
+   | Experiment | Byte-identical | Distinct outputs |
+   |---|---|---|
+   | Intent JSON, schema in prompt | 18/20 (90%) | 2 |
+   | Explanation prose, `max_tokens` 400 | 8/20 (40%) | 6 |
+   | Same, `reasoning_effort: low` | 11/20 (55%) | 6 |
+   | Same, `seed: 42` | 7/20 (35%) | 5 |
+   | Explanation prose, `max_tokens` 1500 (no truncation) | 6/20 (30%) | 11 |
+
+   The 400-token rows are confounded: completion lengths reached the cap (340 to 400 tokens), so some outputs were cut off, and finish reasons were not recorded for those rows. The 1500-token row removes the confound (all 20 finished with `stop`) and is the clean figure. Setting `seed` did not help. **Consequence, to be stated in every evaluation report:** the response cache is a replay store of ONE sampling, not a reproducible computation. Reruns from cache are identical because they replay the stored sample; a live rerun is not expected to match it, and a metric measured on a cached run is a measurement of that sample. Intent classification is closer to deterministic (90%) than explanation prose, which fits the design where the rules engine, not the model, decides amounts.
+7. **Long prompts and the token budget** (explanation call, policy clauses from the real corpus, 1 order, 1 decision):
+
+   | Clauses in prompt | Prompt tokens | Completion (of which reasoning) | Total |
+   |---|---|---|---|
+   | 0 | 213 | 177 (84) | 390 |
+   | 3 | 290 | 356 (181) | 646 |
+   | 6 | 373 | 403 (171) | 776 |
+   | 11 | 480 | 193 (95) | 673 |
+   | 19 (whole corpus) | 662 | 226 (118) | 888 |
+
+   The whole 19-clause corpus adds about 450 prompt tokens over none. A case is two calls (extraction about 500, explanation 650 to 900), roughly **1.2 to 1.5K tokens**. Against 8K tokens per minute that is about 5 to 6 cases a minute; against 200K a day, about 130 to 160 cases a day. **Output budget:** with `max_tokens` 50 the model spent 48 on reasoning and returned an empty reply; the explanation call needs a cap of at least 1000 to 1500, and callers must treat `finish_reason: length` with empty text as a failure, not an answer.
+8. **Free-tier terms.** Not legal advice; read from Groq's published documents on 2026-11-11. The website Terms of Use say they do not apply to GroqCloud, which is governed by the **Groq Services Agreement** (`console.groq.com/docs/legal/services-agreement`). That agreement (a) grants a right to use the Cloud Services including integrating them into applications (s.3.1) and calls them "not for consumer use"; (b) does not define free-tier terms, limits or eligibility and does not address testing, evaluation or portfolio use of the general Cloud Services (only Beta Services are covered); (c) lets Groq increase or decrease capacity limits (s.3.5.a), so the limits above can change; (d) prohibits reselling access, building competing offerings and use "in a manner intended to avoid incurring Fees" (s.6.3); (e) says Groq does not retain inputs or outputs or train on them unless instructed (s.4.2); (f) caps liability for free-of-charge services at $5,000 and excludes them from IP indemnity (s.14.2, 15.3). **Reading:** a clearly labeled simulated demo using synthetic data, one account, no resale and no limit evasion is within what the agreement describes; nothing in it forbids it, but it does not affirmatively address free-tier portfolio use either. The clause to respect in practice is s.6.3(d)(iii): do not work around the limits (for example with extra accounts, which s.3.2 also discourages). No real customer data is sent, which also keeps the retention question moot.
+
+**Verdict on the layer.** Tool calling and JSON output are reliable on this model at this scale, so nothing needs to be worked around. Three design facts changed: the token-per-day limit (not requests) is the capacity bound, so the daily counter needs a token dimension; reasoning tokens make `max_tokens` and empty-reply handling a correctness issue; and the cache must be described as a snapshot of one sampling.
+
 ### 4.1 Interface (`app/providers/base.py`)
 ```
 class LLMProvider(Protocol):
@@ -284,6 +328,7 @@ Checked 2026-11-10 against PyPI JSON metadata (wheel filenames) and the Hugging 
 | torch | 2.15.0 | cp311 `manylinux_2_28_aarch64` wheel, **484 MB** (x86_64: 539 MB); metadata lists `nvidia-*` Linux deps | heavy; needs CPU-only index, and verify CUDA packages are not pulled |
 | sentence-transformers | 6.2.0 | pure Python; requires torch, transformers, scikit-learn, scipy | pulls the heavy tree |
 | fastembed | 0.9.1 | pure-Python wheel, 150 KB; requires onnxruntime, tokenizers, numpy, pillow, loguru, mmh3, py-rust-stemmers, requests, huggingface-hub, tqdm | no torch; mmh3, py-rust-stemmers, pillow not yet checked for aarch64 |
+| httpx (runtime since task 6; was dev-only) | 0.28.1 | pure-Python wheel (`py3-none-any`); its tree is also pure Python: httpcore 1.0.9, h11 0.16.0, anyio 4.16.0, idna 3.20, certifi 2026.10.23, typing-extensions 4.16.0 (checked in `uv.lock`, 2026-11-11) | no native code, so architecture-independent |
 | bge-small-en-v1.5 ONNX | HF `onnx/model.onnx` | 133 MB fp32 in the official repo | architecture-independent file |
 
 Embedding runtime decision: ONNX Runtime + tokenizers + numpy (plus tokenizers' transitive huggingface-hub tree, about a dozen small packages) is well under 100 MB of wheels plus the 133 MB model, versus several hundred MB to over a gigabyte for torch. The earlier "about 40 MB" figure ignored the transitive packages; see the tokenizers row. A hand-written WordPiece tokenizer would remove that tree and is **rejected**; see section 9.1. Approved by the PM; the embedder sits behind an interface local to `app/retrieval/embedder.py`.

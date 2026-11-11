@@ -1,0 +1,483 @@
+{
+  "burst": {
+    "recorded_at": "2026-11-11T21:48:04.105181+00:00",
+    "result": {
+      "all_429_messages": [
+        "Rate limit reached for model `openai/gpt-oss-120b` in organization `org_REDACTED` service tier `on_demand` on requests per minute (RPM): Limit 30, Used 30, Requested 1. Please try again in 2s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing"
+      ],
+      "first_429": {
+        "body": {
+          "error": {
+            "code": "rate_limit_exceeded",
+            "message": "Rate limit reached for model `openai/gpt-oss-120b` in organization `org_REDACTED` service tier `on_demand` on requests per minute (RPM): Limit 30, Used 30, Requested 1. Please try again in 2s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing",
+            "type": "requests"
+          }
+        },
+        "headers": {
+          "retry-after": "2",
+          "x-ratelimit-limit-requests": "1000",
+          "x-ratelimit-remaining-requests": "857",
+          "x-ratelimit-reset-requests": "3h25m55.199s"
+        },
+        "i": 18,
+        "status": 429,
+        "t": 0.12
+      },
+      "n": 45,
+      "status_counts": {
+        "200": 15,
+        "429": 30
+      }
+    }
+  },
+  "console_limits": {
+    "meta-llama/llama-prompt-guard-2-22m": {
+      "rpd": 14400,
+      "rpm": 30,
+      "tpd": 500000,
+      "tpm": 15000
+    },
+    "meta-llama/llama-prompt-guard-2-86m": {
+      "rpd": 14400,
+      "rpm": 30,
+      "tpd": 500000,
+      "tpm": 15000
+    },
+    "openai/gpt-oss-120b": {
+      "rpd": 1000,
+      "rpm": 30,
+      "tpd": 200000,
+      "tpm": 8000
+    },
+    "openai/gpt-oss-20b": {
+      "rpd": 1000,
+      "rpm": 30,
+      "tpd": 200000,
+      "tpm": 8000
+    },
+    "openai/gpt-oss-safeguard-20b": {
+      "rpd": 1000,
+      "rpm": 3,
+      "tpd": 200000,
+      "tpm": 2000
+    },
+    "qwen/qwen3.8-27b": {
+      "rpd": 1000,
+      "rpm": 30,
+      "tpd": 200000,
+      "tpm": 8000
+    },
+    "recorded_at": "2026-11-11",
+    "source": "console.groq.com/settings/limits (read by the user's logged-in browser session)"
+  },
+  "determinism": {
+    "recorded_at": "2026-11-11T21:54:35.790900+00:00",
+    "result": {
+      "classify_json_prompt_only": {
+        "byte_identical": "18/20 (90.0%)",
+        "completion_token_range": [
+          181,
+          195
+        ],
+        "distinct_outputs": 2,
+        "errors": 0,
+        "example_variants": [
+          "{\"intent\":\"refund_request\",\"confidence\":0.95,\"order_number\":\"SIM-2001\"}",
+          "{\"intent\":\"refund_request\",\"confidence\":0.97,\"order_number\":\"SIM-2001\"}"
+        ],
+        "most_common_output_count": 18,
+        "runs": 20
+      },
+      "explanation_prose": {
+        "byte_identical": "8/20 (40.0%)",
+        "completion_token_range": [
+          340,
+          400
+        ],
+        "distinct_outputs": 6,
+        "errors": 0,
+        "example_variants": [
+          "**Decision:** Your cancellation request requires manual review by our support team.\n\n**Why:** The amount involved ($98.00) exceeds the automatic\u2011approval limit set in our system, so a human agent must verify the details before proceeding.  \n\n**Relevant policy:**  \n- **Cancellation\u2011v1\u2011clause\u20111:** You",
+          "**Decision:** Your request requires a manual review by our support team.  \n\n**Why:** The amount involved (\u202f$98.00\u202f) exceeds the automatic\u2011approval limit set in our system, so a human specialist must verify the details before proceeding.  \n\n**Relevant policy:**  \n- **Cancellation\u2011v1\u2011clause\u20111:** You m",
+          "**Decision:** Your cancellation request cannot be processed automatically and will be reviewed by a member of our support team.\n\n**Why:** The amount involved ($98.00) exceeds the automatic\u2011approval limit set in our system, so a human review is required (reason code: **ABOVE_AUTO_APPROVE_CEILING**).\n"
+        ],
+        "most_common_output_count": 8,
+        "runs": 20
+      },
+      "explanation_prose_low_reasoning": {
+        "byte_identical": "11/20 (55.0%)",
+        "completion_token_range": [
+          186,
+          338
+        ],
+        "distinct_outputs": 6,
+        "errors": 0,
+        "example_variants": [
+          "**Decision:** Your cancellation request cannot be processed automatically and will need to be reviewed by a member of our support team.\n\n**Why:** The amount involved (\u202f$98.00\u202f) exceeds the automatic\u2011approval limit set in our system, so a manual review is required.  \n\n**Relevant policy:**  \n- **Cance",
+          "**Decision:** Your cancellation request cannot be processed automatically and will need to be reviewed by a member of our support team.\n\n**Why:** The amount involved (\u202f$98.00\u202f) exceeds the automatic\u2011approval limit set in our system, so a manual review is required.  \n\n**Relevant policy:**  \n- **Cance",
+          "**Decision:** Your cancellation request cannot be processed automatically and will need to be reviewed by a member of our support team.\n\n**Why:** The amount involved (\u202f$98.00\u202f) exceeds the automatic\u2011approval limit set in our system, so a manual review is required.  \n\n**Relevant policy:**  \n- **Cance"
+        ],
+        "most_common_output_count": 11,
+        "runs": 20
+      },
+      "explanation_prose_seed42": {
+        "byte_identical": "7/20 (35.0%)",
+        "completion_token_range": [
+          340,
+          400
+        ],
+        "distinct_outputs": 5,
+        "errors": 0,
+        "example_variants": [
+          "**Decision:** Your cancellation request requires manual review by a team member.  \n\n**Why:** The amount involved ($98.00) exceeds the automatic\u2011approval limit set in our system, so a human must verify the details before the cancellation can be processed.  \n\n**Relevant policy:**  \n- **Cancellation\u2011v1",
+          "**Decision:** Your request requires a manual review by our support team.  \n\n**Why:** The amount involved (\u202f$98.00\u202f) exceeds the automatic\u2011approval limit set in our system, so a human specialist must verify the details before proceeding.  \n\n**Relevant policy:**  \n- **Cancellation\u2011v1\u2011clause\u20111:** You m",
+          "**Decision:** Your cancellation request requires manual review by our support team.\n\n**Why:** The amount involved ($98.00) exceeds the automatic\u2011approval limit set in our system, so a human agent must verify the details before proceeding.  \n\n**Relevant policy:**  \n- **Cancellation\u2011v1\u2011clause\u20111:** You"
+        ],
+        "most_common_output_count": 7,
+        "runs": 20
+      }
+    }
+  },
+  "determinism_explanation_prose_max1500": {
+    "recorded_at": "2026-11-11T21:56:19.968906+00:00",
+    "result": {
+      "explanation_prose_max1500": {
+        "byte_identical": "6/20 (30.0%)",
+        "completion_token_range": [
+          340,
+          445
+        ],
+        "distinct_outputs": 11,
+        "empty_outputs": 0,
+        "errors": 0,
+        "example_variants": [
+          "**Decision:** Your request requires a manual review by our support team.  \n\n**Why:** The amount involved (\u202f$98.00\u202f) exceeds the automatic\u2011approval limit set in our system, so a human specialist must verify the details before proceeding.  \n\n**Relevant policy:**  \n- **Cancellation\u2011v1\u2011clause\u20111:** You m",
+          "**Decision:** Your cancellation request requires manual review.\n\n**Why:** The amount involved (\u202f$98.00\u202f) exceeds the system\u2019s automatic\u2011approval limit, so a human must verify the request before any action is taken.  \n\n**Policy reference:**  \n- **Cancellation\u2011v1\u2011clause\u20111:** You may cancel at any time",
+          "**Decision:** Your cancellation request requires manual review by a team member.  \n\n**Why:** The amount involved ($98.00) exceeds the automatic\u2011approval limit set in our system, so a human must verify the details before the cancellation can be processed.  \n\n**Relevant policy:**  \n- **Cancellation\u2011v1"
+        ],
+        "finish_reasons": {
+          "stop": 20
+        },
+        "most_common_output_count": 6,
+        "output_chars_range": [
+          575,
+          932
+        ],
+        "runs": 20
+      }
+    }
+  },
+  "json": {
+    "recorded_at": "2026-11-11T21:47:32.144663+00:00",
+    "result": {
+      "json_object": {
+        "n": 20,
+        "outcomes": {
+          "bare_json_no_extraction_needed": 20,
+          "valid_and_conformant": 20
+        },
+        "samples": []
+      },
+      "json_schema_strict": {
+        "n": 20,
+        "outcomes": {
+          "error:ProviderRejected": 20
+        },
+        "samples": [
+          "ProviderRejected: groq rejected the request (400): invalid JSON schema for response_format: 'reply': `additionalProperties:false` must be set on every object",
+          "ProviderRejected: groq rejected the request (400): invalid JSON schema for response_format: 'reply': `additionalProperties:false` must be set on every object",
+          "ProviderRejected: groq rejected the request (400): invalid JSON schema for response_format: 'reply': `additionalProperties:false` must be set on every object"
+        ]
+      },
+      "our_contract_complete_structured": {
+        "n": 20,
+        "outcomes": {
+          "valid_after_1_completion(s)": 20
+        }
+      },
+      "prompt_only": {
+        "n": 20,
+        "outcomes": {
+          "bare_json_no_extraction_needed": 20,
+          "valid_and_conformant": 20
+        },
+        "samples": []
+      }
+    }
+  },
+  "jsonstrict": {
+    "recorded_at": "2026-11-11T21:47:57.374216+00:00",
+    "result": {
+      "n": 20,
+      "outcomes": {
+        "valid_and_conformant": 20
+      },
+      "samples": [],
+      "schema_sent": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "intent": {
+            "enum": [
+              "order_status",
+              "cancel_subscription",
+              "refund_request",
+              "policy_question",
+              "other"
+            ],
+            "title": "Intent",
+            "type": "string"
+          },
+          "order_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Order Number"
+          }
+        },
+        "required": [
+          "intent",
+          "order_number",
+          "confidence"
+        ],
+        "title": "Intent",
+        "type": "object"
+      }
+    }
+  },
+  "limits": {
+    "recorded_at": "2026-11-11T21:40:53.388882+00:00",
+    "result": {
+      "headers": {
+        "x-ratelimit-limit-requests": "1000",
+        "x-ratelimit-limit-tokens": "8000",
+        "x-ratelimit-remaining-requests": "999",
+        "x-ratelimit-remaining-tokens": "7843",
+        "x-ratelimit-reset-requests": "1m26.4s",
+        "x-ratelimit-reset-tokens": "1.177s"
+      },
+      "latency_s": 0.39,
+      "model": "openai/gpt-oss-120b",
+      "text": "",
+      "usage": {
+        "completion_tokens": 50,
+        "prompt_tokens": 107,
+        "reasoning_tokens": 48,
+        "total_tokens": 157
+      }
+    }
+  },
+  "longprompt_and_usage": {
+    "recorded_at": "2026-11-11T21:56:53.152661+00:00",
+    "result": {
+      "corpus_clauses": 19,
+      "rows": [
+        {
+          "all_fields_present": true,
+          "call": "explain_0_clauses",
+          "chars_per_prompt_token": 2.34,
+          "completion_tokens": 177,
+          "finish_reason": "stop",
+          "prompt_chars": 499,
+          "prompt_tokens": 213,
+          "reasoning_tokens": 84,
+          "total_equals_prompt_plus_completion": true,
+          "total_tokens": 390
+        },
+        {
+          "all_fields_present": true,
+          "call": "explain_1_clauses",
+          "chars_per_prompt_token": 2.59,
+          "completion_tokens": 253,
+          "finish_reason": "stop",
+          "prompt_chars": 613,
+          "prompt_tokens": 237,
+          "reasoning_tokens": 109,
+          "total_equals_prompt_plus_completion": true,
+          "total_tokens": 490
+        },
+        {
+          "all_fields_present": true,
+          "call": "explain_3_clauses",
+          "chars_per_prompt_token": 2.88,
+          "completion_tokens": 356,
+          "finish_reason": "stop",
+          "prompt_chars": 836,
+          "prompt_tokens": 290,
+          "reasoning_tokens": 181,
+          "total_equals_prompt_plus_completion": true,
+          "total_tokens": 646
+        },
+        {
+          "all_fields_present": true,
+          "call": "explain_6_clauses",
+          "chars_per_prompt_token": 3.12,
+          "completion_tokens": 403,
+          "finish_reason": "stop",
+          "prompt_chars": 1162,
+          "prompt_tokens": 373,
+          "reasoning_tokens": 171,
+          "total_equals_prompt_plus_completion": true,
+          "total_tokens": 776
+        },
+        {
+          "all_fields_present": true,
+          "call": "explain_11_clauses",
+          "chars_per_prompt_token": 3.27,
+          "completion_tokens": 193,
+          "finish_reason": "stop",
+          "prompt_chars": 1569,
+          "prompt_tokens": 480,
+          "reasoning_tokens": 95,
+          "total_equals_prompt_plus_completion": true,
+          "total_tokens": 673
+        },
+        {
+          "all_fields_present": true,
+          "call": "explain_19_clauses",
+          "chars_per_prompt_token": 3.48,
+          "completion_tokens": 226,
+          "finish_reason": "stop",
+          "prompt_chars": 2301,
+          "prompt_tokens": 662,
+          "reasoning_tokens": 118,
+          "total_equals_prompt_plus_completion": true,
+          "total_tokens": 888
+        },
+        {
+          "all_fields_present": true,
+          "call": "tool_call",
+          "chars_per_prompt_token": 3.03,
+          "completion_tokens": 304,
+          "finish_reason": "tool_calls",
+          "prompt_chars": 652,
+          "prompt_tokens": 215,
+          "reasoning_tokens": 254,
+          "total_equals_prompt_plus_completion": true,
+          "total_tokens": 519
+        },
+        {
+          "all_fields_present": true,
+          "call": "json_object",
+          "chars_per_prompt_token": 1.59,
+          "completion_tokens": 148,
+          "finish_reason": "stop",
+          "prompt_chars": 245,
+          "prompt_tokens": 154,
+          "reasoning_tokens": 120,
+          "total_equals_prompt_plus_completion": true,
+          "total_tokens": 302
+        },
+        {
+          "all_fields_present": true,
+          "call": "tiny_plain",
+          "chars_per_prompt_token": 1.64,
+          "completion_tokens": 124,
+          "finish_reason": "stop",
+          "prompt_chars": 175,
+          "prompt_tokens": 107,
+          "reasoning_tokens": 113,
+          "total_equals_prompt_plus_completion": true,
+          "total_tokens": 231
+        }
+      ]
+    }
+  },
+  "models": {
+    "recorded_at": "2026-11-11T21:40:41.539675+00:00",
+    "result": {
+      "active": {
+        "allam-2-7b": true,
+        "canopylabs/orpheus-arabic-saudi": true,
+        "canopylabs/orpheus-v1-english": true,
+        "meta-llama/llama-prompt-guard-2-22m": true,
+        "meta-llama/llama-prompt-guard-2-86m": true,
+        "openai/gpt-oss-120b": true,
+        "openai/gpt-oss-20b": true,
+        "openai/gpt-oss-safeguard-20b": true,
+        "qwen/qwen3.8-27b": true,
+        "whisper-large-v3": true,
+        "whisper-large-v3-turbo": true
+      },
+      "context_windows": {
+        "allam-2-7b": 4096,
+        "canopylabs/orpheus-arabic-saudi": 4000,
+        "canopylabs/orpheus-v1-english": 4000,
+        "meta-llama/llama-prompt-guard-2-22m": 512,
+        "meta-llama/llama-prompt-guard-2-86m": 512,
+        "openai/gpt-oss-120b": 131072,
+        "openai/gpt-oss-20b": 131072,
+        "openai/gpt-oss-safeguard-20b": 131072,
+        "qwen/qwen3.8-27b": 131072,
+        "whisper-large-v3": 448,
+        "whisper-large-v3-turbo": 448
+      },
+      "count": 11,
+      "ids": [
+        "allam-2-7b",
+        "canopylabs/orpheus-arabic-saudi",
+        "canopylabs/orpheus-v1-english",
+        "meta-llama/llama-prompt-guard-2-22m",
+        "meta-llama/llama-prompt-guard-2-86m",
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "openai/gpt-oss-safeguard-20b",
+        "qwen/qwen3.8-27b",
+        "whisper-large-v3",
+        "whisper-large-v3-turbo"
+      ],
+      "max_completion_tokens": {
+        "allam-2-7b": 4096,
+        "canopylabs/orpheus-arabic-saudi": 50000,
+        "canopylabs/orpheus-v1-english": 50000,
+        "meta-llama/llama-prompt-guard-2-22m": 512,
+        "meta-llama/llama-prompt-guard-2-86m": 512,
+        "openai/gpt-oss-120b": 65536,
+        "openai/gpt-oss-20b": 65536,
+        "openai/gpt-oss-safeguard-20b": 65536,
+        "qwen/qwen3.8-27b": 16384,
+        "whisper-large-v3": 448,
+        "whisper-large-v3-turbo": 448
+      },
+      "status": 200
+    }
+  },
+  "notes": [
+    "With max_completion_tokens=50 reasoning used 48 tokens and the visible reply was EMPTY (finish_reason length). Reasoning tokens count against the completion cap.",
+    "response_format json_object returns HTTP 400 unless the word 'json' appears in the messages.",
+    "response_format json_schema strict returns HTTP 400 unless every object has additionalProperties:false and lists all properties as required; with a compliant schema it worked 20/20."
+  ],
+  "toolarge": {
+    "code": "rate_limit_exceeded",
+    "error_message_shape": "Request too large for model <model> in organization <org> service tier on_demand on tokens per minute (TPM): Limit 8000, Requested 12082, please reduce your message size and try again.",
+    "retry_after": "70",
+    "status": 413,
+    "type": "tokens"
+  },
+  "tools": {
+    "recorded_at": "2026-11-11T21:42:29.622436+00:00",
+    "result": {
+      "calls_that_needed_transport_retry": 0,
+      "failure_rate": 0.0,
+      "failures": [],
+      "model_latency_s": {
+        "max": 1.0885086999987834,
+        "median": 0.5030081999993854
+      },
+      "n": 50,
+      "outcomes": {
+        "valid": 50
+      },
+      "valid": "50/50 (100.0%)"
+    }
+  }
+}
