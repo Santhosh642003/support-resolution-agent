@@ -18,6 +18,8 @@ def test_limiter_defaults_are_version_controlled_in_settings_not_in_env() -> Non
     d = settings()
     assert (d.llm_rpm, d.llm_tpm, d.llm_rpd, d.llm_tpd) == (25, 7000, 900, 180000)
     assert d.llm_explanation_max_tokens == 1500
+    assert d.llm_native_json == "json_schema"  # enabled after the 20/20 live check (SPEC 4.0.3)
+    assert d.retrieval_k == 7
 
 
 def test_env_overrides_the_defaults(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -10,6 +10,8 @@ docker compose up -d --build     # Postgres 17 + pgvector, and the backend on :8
 curl localhost:8000/health
 ```
 
+Run the API (read-only state endpoints for orders, items, shipments and subscriptions; identity comes from a `session` cookie, never a parameter): `cd backend && uv run uvicorn app.main:app`. `CLOCK_MODE=simulated` (default) pins the business-date clock to 2026-04-15 so the seeded data keeps its meaning; `CLOCK_MODE=system` uses the real clock. There is no login endpoint yet.
+
 Seed the synthetic dataset (idempotent, deterministic; after `alembic upgrade head`): `cd backend && uv run python -m app.seed`.
 
 Backend development: `cd backend && uv sync && uv run pytest`. Python 3.12 is provisioned by uv.

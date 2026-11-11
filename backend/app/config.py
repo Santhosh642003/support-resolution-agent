@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     llm_tpd: int | None = 180000
     llm_cache_mode: Literal["read_write", "replay_only", "off"] = "read_write"
     # Native structured-output hint. Only a hint: our own parse/validate always runs.
-    llm_native_json: Literal["none", "json_object", "json_schema"] = "json_object"
+    llm_native_json: Literal["none", "json_object", "json_schema"] = "json_schema"
     # Completion cap for the explanation call. Reasoning tokens count against it, so a small cap
     # yields an EMPTY reply (finish_reason 'length'), which is treated as a failure.
     llm_explanation_max_tokens: int = 1500
