@@ -27,6 +27,7 @@ Full design: `docs/SPEC.md`.
 - **Injection resistance.** Retrieved documents and customer messages cannot grant permissions or override backend rules.
 - **Human handoff.** Unresolved cases carry the relevant evidence and the actions attempted.
 - **Bounded workflow.** An explicit state machine with a capped number of tool calls.
+- **Citations come from the Decision.** The rules engine emits, with every Decision, the exact clause keys it applied; those are the citations. Retrieval supplies context text and answers general policy questions; it cannot add, remove or change a citation, and a similarity score never influences an outcome. The model never selects citations (SPEC 10.4).
 
 Release bar: **zero unauthorized writes and zero duplicate refunds** in the defined test suite.
 

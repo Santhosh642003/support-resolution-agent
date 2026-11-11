@@ -43,10 +43,12 @@ class Settings(BaseSettings):
     # yields an EMPTY reply (finish_reason 'length'), which is treated as a failure.
     llm_explanation_max_tokens: int = 1500
     # Hybrid retrieval (app/retrieval/hybrid.py). Configuration, not constants in the code.
-    # retrieval_k=7 is chosen from the recall curve in SPEC 7.1 (smallest k that retrieved every
-    # clause the seeded cases need). Weights and the RRF constant are untuned defaults.
+    # retrieval_k=7 is the UNCHANGED default: on the expanded corpus no k up to 10 met the
+    # pre-registered selection rule (SPEC 7.2), so it is not an evidence-chosen value. The
+    # full-text weight stays at 1.0 pending a PM decision (vector-only measured better, SPEC 7.2).
+    # candidates >= k so each leg can supply a full top-k; the RRF constant is an untuned default.
     retrieval_k: int = 7
-    retrieval_candidates: int = 8
+    retrieval_candidates: int = 20
     retrieval_rrf_k: int = 60
     retrieval_weight_fts: float = 1.0
     retrieval_weight_vec: float = 1.0

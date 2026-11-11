@@ -248,9 +248,16 @@ def vector_leg(
     n: int,
     filters: ScopeFilters = DEFAULT_FILTERS,
 ) -> list[PolicyClause]:
-    """Vector leg (cosine distance), date-filtered. The iterative scan keeps a selective filter
-    from silently under-returning if the planner uses the HNSW index."""
-    conn.execute(text("SET LOCAL hnsw.iterative_scan = strict_order"))
+    """Vector leg (cosine distance), date-filtered, and EXACT.
+
+    The HNSW index is approximate, and whether the planner uses it depends on table statistics,
+    so the same query could return a different top-k in a different database state (found when
+    the recorded recall numbers failed to reproduce inside the full test suite; FAILURE_ANALYSIS
+    F-007). At this corpus size (tens to hundreds of clauses) an approximate index buys nothing,
+    so index scans are disabled for this statement and the ranking is an exact sequential scan.
+    Revisit only when the corpus is large enough for an ANN index to matter, and then measure."""
+    conn.execute(text("SET LOCAL enable_indexscan = off"))
+    conn.execute(text("SET LOCAL enable_bitmapscan = off"))
     rows = conn.execute(
         text(
             f"SELECT {_COLUMNS} FROM {_FROM}"  # noqa: S608 (constants only)

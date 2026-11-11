@@ -1,0 +1,727 @@
+{
+  "S0_heldout": {
+    "modes": {
+      "fts_only": {
+        "10": {
+          "clause": [
+            49,
+            64
+          ],
+          "full": 20
+        },
+        "3": {
+          "clause": [
+            27,
+            64
+          ],
+          "full": 7
+        },
+        "4": {
+          "clause": [
+            30,
+            64
+          ],
+          "full": 9
+        },
+        "5": {
+          "clause": [
+            33,
+            64
+          ],
+          "full": 11
+        },
+        "6": {
+          "clause": [
+            40,
+            64
+          ],
+          "full": 12
+        },
+        "7": {
+          "clause": [
+            41,
+            64
+          ],
+          "full": 13
+        },
+        "8": {
+          "clause": [
+            43,
+            64
+          ],
+          "full": 14
+        },
+        "9": {
+          "clause": [
+            44,
+            64
+          ],
+          "full": 15
+        }
+      },
+      "hybrid": {
+        "10": {
+          "clause": [
+            56,
+            64
+          ],
+          "full": 24
+        },
+        "3": {
+          "clause": [
+            34,
+            64
+          ],
+          "full": 7
+        },
+        "4": {
+          "clause": [
+            37,
+            64
+          ],
+          "full": 9
+        },
+        "5": {
+          "clause": [
+            42,
+            64
+          ],
+          "full": 12
+        },
+        "6": {
+          "clause": [
+            45,
+            64
+          ],
+          "full": 15
+        },
+        "7": {
+          "clause": [
+            47,
+            64
+          ],
+          "full": 16
+        },
+        "8": {
+          "clause": [
+            50,
+            64
+          ],
+          "full": 18
+        },
+        "9": {
+          "clause": [
+            50,
+            64
+          ],
+          "full": 18
+        }
+      },
+      "vector_only": {
+        "10": {
+          "clause": [
+            61,
+            64
+          ],
+          "full": 29
+        },
+        "3": {
+          "clause": [
+            39,
+            64
+          ],
+          "full": 10
+        },
+        "4": {
+          "clause": [
+            44,
+            64
+          ],
+          "full": 14
+        },
+        "5": {
+          "clause": [
+            52,
+            64
+          ],
+          "full": 21
+        },
+        "6": {
+          "clause": [
+            53,
+            64
+          ],
+          "full": 21
+        },
+        "7": {
+          "clause": [
+            57,
+            64
+          ],
+          "full": 25
+        },
+        "8": {
+          "clause": [
+            58,
+            64
+          ],
+          "full": 26
+        },
+        "9": {
+          "clause": [
+            60,
+            64
+          ],
+          "full": 28
+        }
+      }
+    },
+    "queries": 32,
+    "random": {
+      "10": {
+        "clause": 35.59,
+        "full": 13.16
+      },
+      "3": {
+        "clause": 10.68,
+        "full": 1.72
+      },
+      "4": {
+        "clause": 14.23,
+        "full": 2.72
+      },
+      "5": {
+        "clause": 17.79,
+        "full": 3.93
+      },
+      "6": {
+        "clause": 21.35,
+        "full": 5.35
+      },
+      "7": {
+        "clause": 24.91,
+        "full": 6.98
+      },
+      "8": {
+        "clause": 28.47,
+        "full": 8.83
+      },
+      "9": {
+        "clause": 32.03,
+        "full": 10.89
+      }
+    },
+    "scope_sizes": [
+      11,
+      22,
+      23,
+      36
+    ]
+  },
+  "S0_selection": {
+    "modes": {
+      "fts_only": {
+        "10": {
+          "clause": [
+            24,
+            32
+          ],
+          "full": 11
+        },
+        "3": {
+          "clause": [
+            13,
+            32
+          ],
+          "full": 4
+        },
+        "4": {
+          "clause": [
+            13,
+            32
+          ],
+          "full": 4
+        },
+        "5": {
+          "clause": [
+            14,
+            32
+          ],
+          "full": 5
+        },
+        "6": {
+          "clause": [
+            17,
+            32
+          ],
+          "full": 5
+        },
+        "7": {
+          "clause": [
+            17,
+            32
+          ],
+          "full": 5
+        },
+        "8": {
+          "clause": [
+            19,
+            32
+          ],
+          "full": 7
+        },
+        "9": {
+          "clause": [
+            22,
+            32
+          ],
+          "full": 9
+        }
+      },
+      "hybrid": {
+        "10": {
+          "clause": [
+            28,
+            32
+          ],
+          "full": 12
+        },
+        "3": {
+          "clause": [
+            14,
+            32
+          ],
+          "full": 4
+        },
+        "4": {
+          "clause": [
+            16,
+            32
+          ],
+          "full": 4
+        },
+        "5": {
+          "clause": [
+            17,
+            32
+          ],
+          "full": 5
+        },
+        "6": {
+          "clause": [
+            21,
+            32
+          ],
+          "full": 8
+        },
+        "7": {
+          "clause": [
+            25,
+            32
+          ],
+          "full": 10
+        },
+        "8": {
+          "clause": [
+            27,
+            32
+          ],
+          "full": 12
+        },
+        "9": {
+          "clause": [
+            28,
+            32
+          ],
+          "full": 12
+        }
+      },
+      "vector_only": {
+        "10": {
+          "clause": [
+            31,
+            32
+          ],
+          "full": 15
+        },
+        "3": {
+          "clause": [
+            18,
+            32
+          ],
+          "full": 6
+        },
+        "4": {
+          "clause": [
+            22,
+            32
+          ],
+          "full": 8
+        },
+        "5": {
+          "clause": [
+            26,
+            32
+          ],
+          "full": 10
+        },
+        "6": {
+          "clause": [
+            29,
+            32
+          ],
+          "full": 13
+        },
+        "7": {
+          "clause": [
+            30,
+            32
+          ],
+          "full": 14
+        },
+        "8": {
+          "clause": [
+            30,
+            32
+          ],
+          "full": 14
+        },
+        "9": {
+          "clause": [
+            31,
+            32
+          ],
+          "full": 15
+        }
+      }
+    },
+    "queries": 16,
+    "random": {
+      "10": {
+        "clause": 17.79,
+        "full": 6.58
+      },
+      "3": {
+        "clause": 5.34,
+        "full": 0.86
+      },
+      "4": {
+        "clause": 7.12,
+        "full": 1.36
+      },
+      "5": {
+        "clause": 8.9,
+        "full": 1.96
+      },
+      "6": {
+        "clause": 10.68,
+        "full": 2.67
+      },
+      "7": {
+        "clause": 12.46,
+        "full": 3.49
+      },
+      "8": {
+        "clause": 14.23,
+        "full": 4.41
+      },
+      "9": {
+        "clause": 16.01,
+        "full": 5.44
+      }
+    },
+    "scope_sizes": [
+      11,
+      22,
+      23,
+      36
+    ]
+  },
+  "S1_heldout": {
+    "modes": {
+      "fts_only": {
+        "7": {
+          "clause": [
+            23,
+            64
+          ],
+          "full": 5
+        }
+      },
+      "hybrid": {
+        "7": {
+          "clause": [
+            31,
+            64
+          ],
+          "full": 8
+        }
+      },
+      "vector_only": {
+        "7": {
+          "clause": [
+            41,
+            64
+          ],
+          "full": 11
+        }
+      }
+    },
+    "queries": 32,
+    "random": {
+      "7": {
+        "clause": 7.47,
+        "full": 0.76
+      }
+    },
+    "scope_sizes": [
+      60
+    ]
+  },
+  "S1_selection": {
+    "modes": {
+      "fts_only": {
+        "7": {
+          "clause": [
+            11,
+            32
+          ],
+          "full": 3
+        }
+      },
+      "hybrid": {
+        "7": {
+          "clause": [
+            14,
+            32
+          ],
+          "full": 3
+        }
+      },
+      "vector_only": {
+        "7": {
+          "clause": [
+            22,
+            32
+          ],
+          "full": 8
+        }
+      }
+    },
+    "queries": 16,
+    "random": {
+      "7": {
+        "clause": 3.73,
+        "full": 0.38
+      }
+    },
+    "scope_sizes": [
+      60
+    ]
+  },
+  "S2_heldout": {
+    "modes": {
+      "fts_only": {
+        "7": {
+          "clause": [
+            36,
+            64
+          ],
+          "full": 10
+        }
+      },
+      "hybrid": {
+        "7": {
+          "clause": [
+            45,
+            64
+          ],
+          "full": 14
+        }
+      },
+      "vector_only": {
+        "7": {
+          "clause": [
+            54,
+            64
+          ],
+          "full": 22
+        }
+      }
+    },
+    "queries": 32,
+    "random": {
+      "7": {
+        "clause": 11.79,
+        "full": 1.47
+      }
+    },
+    "scope_sizes": [
+      38
+    ]
+  },
+  "S2_selection": {
+    "modes": {
+      "fts_only": {
+        "7": {
+          "clause": [
+            14,
+            32
+          ],
+          "full": 4
+        }
+      },
+      "hybrid": {
+        "7": {
+          "clause": [
+            21,
+            32
+          ],
+          "full": 7
+        }
+      },
+      "vector_only": {
+        "7": {
+          "clause": [
+            30,
+            32
+          ],
+          "full": 14
+        }
+      }
+    },
+    "queries": 16,
+    "random": {
+      "7": {
+        "clause": 5.89,
+        "full": 0.74
+      }
+    },
+    "scope_sizes": [
+      38
+    ]
+  },
+  "chosen_k": 7,
+  "heldout_full_recall_by_k_at_chosen_weight": {
+    "by_k": {
+      "10": 29,
+      "3": 10,
+      "4": 14,
+      "5": 21,
+      "6": 21,
+      "7": 25,
+      "8": 26,
+      "9": 28
+    },
+    "fts_weight": 0.0
+  },
+  "incorporation_completeness_at_k": {
+    "heldout": {
+      "in_effect_clauses_retrieved": 6,
+      "queries": 12,
+      "rule_text_present": 6
+    },
+    "selection": {
+      "in_effect_clauses_retrieved": 4,
+      "queries": 6,
+      "rule_text_present": 4
+    }
+  },
+  "miss_analysis_heldout": {
+    "hybrid": {
+      "missed_by_clause": {
+        "cancellation-v1-clause-1": "1/4",
+        "cancellation-v2-clause-1": "1/4",
+        "refund-v1-clause-3": "3/4",
+        "refund-v2-clause-1": "9/16",
+        "refund-v2-clause-5": "1/8",
+        "shipping-v1-clause-2": "1/4",
+        "shipping-v1-clause-3": "1/4"
+      },
+      "non_core_types": {
+        "gift_cards": 102,
+        "shipping_restrictions": 8,
+        "warranty": 19
+      },
+      "slots": 224,
+      "slots_taken_by_non_core_policy_types": 129
+    },
+    "vector_only": {
+      "missed_by_clause": {
+        "cancellation-v1-clause-1": "1/4",
+        "refund-v1-clause-3": "1/4",
+        "refund-v2-clause-1": "5/16"
+      },
+      "non_core_types": {
+        "gift_cards": 80,
+        "shipping_restrictions": 5,
+        "warranty": 23
+      },
+      "slots": 224,
+      "slots_taken_by_non_core_policy_types": 108
+    }
+  },
+  "miss_analysis_selection": {
+    "hybrid": {
+      "missed_by_clause": {
+        "cancellation-v2-clause-1": "1/2",
+        "refund-v1-clause-3": "2/2",
+        "refund-v2-clause-1": "2/8",
+        "refund-v2-clause-5": "1/4",
+        "shipping-v1-clause-3": "1/2"
+      },
+      "non_core_types": {
+        "gift_cards": 55,
+        "shipping_restrictions": 2,
+        "warranty": 5
+      },
+      "slots": 112,
+      "slots_taken_by_non_core_policy_types": 62
+    },
+    "vector_only": {
+      "missed_by_clause": {
+        "refund-v2-clause-1": "1/8",
+        "shipping-v1-clause-3": "1/2"
+      },
+      "non_core_types": {
+        "gift_cards": 38,
+        "shipping_restrictions": 2,
+        "warranty": 8
+      },
+      "slots": 112,
+      "slots_taken_by_non_core_policy_types": 48
+    }
+  },
+  "protocol": "(fixed before the held-out queries were run):\n  * selection set = the 16 queries k was previously chosen on (tests/fixtures/retrieval_cases.py);\n    held-out set = 32 new queries (tests/fixtures/retrieval_heldout.py), never used to choose\n    anything. Both are reported separately.\n  * k is chosen on the SELECTION set only: the smallest k in 3..10 at which hybrid retrieves every\n    needed clause for at least 15 of its 16 queries. If none qualifies, k is left unchanged.\n  * \"full recall\" = every needed DIRECT clause is in the top k. \"clause recall\" = the fraction of\n    needed clauses found. The random baseline is the expectation of picking k clauses uniformly\n    from the in-scope set (same date filter, same scope).\n  * Scopes: S0 production (routed types + customer/current filters); S2 all customer-facing\n    current types (metadata filters, no routing); S1 all types with no metadata filters (the date\n    filter alone).",
+  "rule": "smallest k in 3..10 with hybrid full recall >= 15/16 on selection",
+  "weight_sweep": {
+    "by_fts_weight": {
+      "0.0": {
+        "heldout": 25,
+        "selection": 14
+      },
+      "0.25": {
+        "heldout": 17,
+        "selection": 11
+      },
+      "0.5": {
+        "heldout": 17,
+        "selection": 11
+      },
+      "0.75": {
+        "heldout": 16,
+        "selection": 11
+      },
+      "1.0": {
+        "heldout": 16,
+        "selection": 10
+      }
+    },
+    "chosen_fts_weight_on_selection": 0.0,
+    "heldout_at_chosen": 25,
+    "heldout_at_equal_weights": 16,
+    "heldout_queries": 32,
+    "k": 7,
+    "selection_queries": 16
+  }
+}

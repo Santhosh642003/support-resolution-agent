@@ -253,3 +253,40 @@ def test_recall_curve_is_reproducible_and_beats_random_only_slightly(
     # where it matters (small k), hybrid is at or above the random baseline at k=1..4, 6, 7
     for k in (1, 2, 3, 4, 6, 7):
         assert measured[k] >= random_expectation(k) - 0.5, k
+
+
+def test_the_vector_leg_is_exact_so_results_do_not_depend_on_planner_state(
+    corpus: Connection, embedder: OnnxBgeEmbedder
+) -> None:
+    """FAILURE_ANALYSIS F-007: an approximate HNSW scan chosen by the planner changed the top-k
+    between database states. The leg must equal a brute-force cosine ranking, and must have
+    turned index scans off for its statement."""
+    import numpy as np
+    from sqlalchemy import text as sql
+
+    day = pd(date(2026, 4, 1))
+    types = ("refund", "gift_cards", "warranty")
+    rows = corpus.execute(
+        sql(
+            "SELECT c.chunk_key, c.embedding::text AS emb FROM policy_chunks c"
+            " JOIN policy_documents d ON d.id = c.document_id"
+            " WHERE c.validity @> CAST(:d AS date) AND c.policy_type = ANY(CAST(:t AS text[]))"
+            " AND d.audience = 'customer' AND d.status = 'current'"
+        ),
+        {"d": day, "t": list(types)},
+    ).all()
+    keys = [r.chunk_key for r in rows]
+    mat = np.array([[float(x) for x in r.emb.strip("[]").split(",")] for r in rows])
+    for q in (
+        "can I return the gift card I bought last week",
+        "my item broke after a month is it under warranty",
+        "how long do I have to ask for a refund",
+        "digital add-on refund",
+    ):
+        qv = np.array(embedder.embed([q])[0])
+        sims = mat @ qv / (np.linalg.norm(mat, axis=1) * np.linalg.norm(qv))
+        order = sorted(range(len(keys)), key=lambda i: (-round(float(sims[i]), 9), keys[i]))
+        expected = [keys[i] for i in order][:10]
+        got = [c.chunk_key for c in vector_leg(corpus, qv.tolist(), day, types, 10)]
+        assert got == expected, q
+    assert corpus.execute(sql("SHOW enable_indexscan")).scalar_one() == "off"
