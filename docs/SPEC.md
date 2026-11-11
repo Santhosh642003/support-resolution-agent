@@ -43,7 +43,7 @@ Triggered by: rule engine `needs_human`, denied-but-disputed, repeated failures,
 
 ## 2. Data model (PostgreSQL)
 
-**The authoritative schema is the Alembic migrations** (`backend/alembic/versions/0001_*`, `0002_*`); this section summarizes the design and what the database itself enforces. Money is `bigint` cents, timestamps are `timestamptz`, IDs are UUIDs. All data is synthetic.
+**The authoritative schema is the Alembic migrations** (`backend/alembic/versions/0001_*` to `0004_*`); this section summarizes the design and what the database itself enforces. Money is `bigint` cents, timestamps are `timestamptz`, IDs are UUIDs. All data is synthetic.
 
 Tables in migrations 0001/0002: `customers`, `auth_sessions`, `products`, `subscriptions`, `orders`, `order_items`, `shipments`, `shipment_events`, `policy_documents`, `policy_chunks`, `conversations`, `messages`, `decisions`, `decision_policies`, `confirmation_tokens`, `actions`, `refunds`, `refund_lines` (migration 0003), `audit_log`, plus the views `v_refund_drift` and `v_refund_line_drift`. Planned for later migrations: `handoffs`, `llm_cache`, `llm_calls`, `tool_calls`, `retrieval_logs`, `eval_runs`, `eval_case_results`.
 
@@ -78,7 +78,20 @@ The execute path takes `SELECT ... FROM orders WHERE id=$1 FOR UPDATE` before co
 ### 2.5 Time
 Use `clock_timestamp()` where wall-clock matters for expiry. `now()` is frozen at transaction start, so a long execution transaction would otherwise never observe a token expiring (found by a failing test).
 
-### 2.6 Limits of database enforcement
+### 2.6 Policy chunk identity (migration 0004)
+Clause-level chunks carry a stable, human-meaningful identity and the date filter needs no join.
+| Column / object | Purpose and enforcement |
+|---|---|
+| `policy_chunks.chunk_key` (`text NOT NULL`, `UNIQUE`) | Citation identifier such as `refund-v2-clause-3`. `policy_chunks_key_scheme` is a CHECK that it equals `policy_type \|\| '-v' \|\| version \|\| '-clause-' \|\| clause_number`, so the scheme cannot drift. Checked directly against the dev database on 2026-11-11: `chunk-7` and a well-formed key with the wrong clause number are both rejected with 23514. |
+| `clause_number` (`integer NOT NULL`, `CHECK > 0`) | Position within the document, `UNIQUE (document_id, clause_number)`. |
+| `policy_type`, `version`, `validity` (denormalized, `NOT NULL`) | Copied from the document so retrieval filters `validity @> purchase_date` on the chunk table alone. A composite FK `policy_chunks_document_identity_fk (document_id, policy_type, version, validity)` to `policy_documents_identity_uq` guarantees the copies always equal the document's values. |
+| `policy_chunks_type_validity_idx` (gist on `policy_type, validity`) | Supports the date filter. |
+| `policy_documents_guard_trg` (BEFORE UPDATE) | Rejects changes to `policy_type`, `version`, `validity`, `content_hash`, `title` (SQLSTATE 23001). A changed policy needs a new version. |
+| `policy_chunks_guard_trg` (BEFORE UPDATE) | Rejects changes to `chunk_key`, `text`, `clause_number`, `document_id`, `policy_type`, `version`, `validity` (23001), so a citation keeps its meaning. Embedding and Prompt Guard verdict columns stay updatable. |
+
+Ingestion (`app/retrieval/ingest.py`) is idempotent: a second run inserted 0 documents and 0 chunks and left every chunk key, row id, text hash and embedding hash unchanged (compared on the dev database, 2026-11-11). Seeded corpus: 5 documents, 19 chunks (cancellation v1 3, v2 2; refund v1 6, v2 5; shipping v1 3). Like the other guard triggers, these are bypassable by the table owner (2.7).
+
+### 2.7 Limits of database enforcement
 The table owner (and superusers) can drop triggers or disable them. The app should connect as a non-owner role in deployment; local development uses the compose superuser. Until that role exists, the append-only and invariant guarantees hold against application bugs, not against someone with owner credentials.
 
 ## 3. State machine
@@ -269,7 +282,11 @@ Checked 2026-11-10 against PyPI JSON metadata (wheel filenames) and the Hugging 
 
 Embedding runtime decision: ONNX Runtime + tokenizers + numpy (plus tokenizers' transitive huggingface-hub tree, about a dozen small packages) is well under 100 MB of wheels plus the 133 MB model, versus several hundred MB to over a gigabyte for torch. The earlier "about 40 MB" figure ignored the transitive packages; see the tokenizers row. A hand-written WordPiece tokenizer would remove that tree and is **rejected**; see section 9.1. Approved by the PM; the embedder sits behind an interface local to `app/retrieval/embedder.py`.
 
-The backend image built locally on amd64 at 317 MB. The Dockerfile contains nothing architecture-specific, but it has not been built on arm64.
+The backend image built locally on amd64 at 317 MB before the embedder, and **296 MB compressed / 795 MB uncompressed with the embedder and model** (details in 9.1; measured 2026-11-11). The Dockerfile contains nothing architecture-specific, but it has not been built on arm64.
+
+| Image | Size (amd64, 2026-11-11) | arm64 evidence |
+|---|---|---|
+| `support-backend` (app + onnxruntime + tokenizers + numpy + bge-small ONNX model) | 296 MB compressed, 795 MB uncompressed | not built on arm64; every dependency row above has an aarch64 wheel, the base images list `linux/arm64`, and the model file is architecture-independent. Native verification is the OCI build at M4. |
 
 ### 9.1 Decision: keep `tokenizers`; do not hand-write a tokenizer (PM, 2026-11-10)
 
@@ -278,7 +295,12 @@ The backend image built locally on amd64 at 317 MB. The Dockerfile contains noth
 - **What it would have saved:** the transitive tree (about a dozen small packages, tens of MB). Not a binding constraint: the backend image was 317 MB before the embedder, against an OCI instance with at least 6 GB of memory. The same reasoning keeps int8 quantization deferred.
 - **Revisit only on a measured problem**, such as the OCI instance actually running short of disk.
 - **`httpx2`:** a transitive dependency is acceptable. Project code must not import `httpx2` or `httpcore2`; `backend/tests/unit/test_import_boundaries.py` fails if any module under `app/` does, so the boundary is enforced by CI rather than remembered.
-- **Image size with the embedder:** the Dockerfile now fetches and verifies the pinned model during the build (fails on a SHA-256 mismatch). **Final size not yet measured**: the build could not complete because the development machine's C: drive was full (Docker Desktop could not start). Baseline before the embedder: 317 MB. To be recorded here once measured.
+- **Image size with the embedder (measured 2026-11-11, linux/amd64 only):** the Dockerfile fetches and verifies the pinned model during the build (fails on a SHA-256 mismatch). The build succeeded, and inside the container the embedder loaded and returned a 384-dimension vector as the non-root user. Sizes, by method (they differ and are not interchangeable):
+  - **Compressed content size: 296 MB** (`docker image inspect .Size`). The comparable figure to the 317 MB pre-embedder baseline *if* that was measured the same way; the earlier measurement method was not recorded, so the two are not strictly comparable.
+  - **Uncompressed filesystem: 795 MB** (`du -sx /` as root). Layers: base OS 85 MB, python 55 MB, uv binary 58 MB, dependencies 480 MB, model 134 MB.
+  - `docker image ls` reports 1.11 GB under Docker Desktop's containerd store; that figure includes accounting that does not match the layer sizes and is not used here.
+  - **Known waste, not yet fixed:** about 208 MB of the dependency layer is uv's download cache in `/root/.cache/uv` (`UV_NO_CACHE=1` or `--no-cache` would drop it). The model (134 MB) is about 17 percent of the uncompressed image.
+  - The image does not contain `policies/`, so the ingest CLI cannot run inside it as built. Ingestion is currently a host-side step.
 
 ## 10. Response path and explanation correctness
 
@@ -413,7 +435,7 @@ Monday to Friday, no holiday calendar. The rule lives in **one module** (`app/do
 
 ## 17. Row-level security and database roles (M2 task 0, PM-approved 2026-11-10)
 
-Converts ownership (requirement g) from convention to enforcement and addresses section 2.6. Done at the start of M2, before repositories multiply. Each of the four points below is a way RLS silently does nothing.
+Converts ownership (requirement g) from convention to enforcement and addresses section 2.7. Done at the start of M2, before repositories multiply. Each of the four points below is a way RLS silently does nothing.
 
 ### 17.1 Roles: who owns what
 | Role | Purpose | Attributes |
