@@ -49,7 +49,7 @@ Voice, mobile, fine-tuning, graph databases, multiple agents, extra connectors, 
 No paid API access. This is a hard constraint, and the architecture must keep it invisible to the rest of the codebase.
 
 - **Provider abstraction.** One internal interface for chat completion and structured output. Adapters: `GroqAdapter` (primary, OpenAI-compatible, `base_url` swap), `GeminiAdapter` (secondary), `FakeAdapter` (deterministic, no network). Provider and model are selected by environment variable.
-- **No vendor SDK outside the adapter layer.** No module outside `app/llm/adapters/` may import a vendor SDK or reference a model name. Enforce with a test/lint check.
+- **No vendor SDK outside the adapter layer.** No module outside `app/providers/` may import a vendor SDK or reference a model name. Enforce with a test/lint check.
 - **Rate limiting is a first-class feature.** Token-bucket limiter, bounded exponential backoff with jitter, capped retries, and a clearly surfaced daily-quota-exhausted error. Quota failures map to the workflow's pending/failed path, never a fabricated success.
 - **Response cache** in PostgreSQL keyed by hash of (provider, model, full prompt, temperature, tool schema version). Eval runs replay from cache at zero calls with identical results. Cache hits/misses appear in the trace; eval reports include cache-hit rate.
 - **Cost accounting** still applies: tokens per case, latency split into model time vs tool time, configurable price-per-token. Label cost figures **projected, not incurred**.

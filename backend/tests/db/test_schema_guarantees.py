@@ -357,6 +357,11 @@ def test_every_customer_scoped_table_has_customer_id_not_null(conn: Connection) 
         "decision_policies",
         "alembic_version",
         "audit_log",  # audit_log.customer_id is nullable (system events)
+        # Provider-layer tables hold no customer data (hashes, counters, token counts; the
+        # prompt is never stored), so they are deliberately not customer-scoped (migration 0005).
+        "llm_cache",
+        "llm_calls",
+        "llm_usage_daily",
     }
     nullable = {
         r.table_name

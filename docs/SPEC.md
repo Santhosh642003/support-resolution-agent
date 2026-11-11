@@ -153,7 +153,7 @@ Llama Prompt Guard 2 is defense in depth and a **measurement layer**. It is neve
 - **Placement by trust, not by time:** classify text by whether it is attacker-influenced and whether it changes. (1) Policy documents, static and authored by us: scan **once at ingestion** and store the verdict with the chunk (`policy_chunks.injection_verdict`); never per request. (2) The customer message in the current turn: scan **per request**. (3) Any customer-writable field that later gets retrieved (order notes, profile text): scan **at write time AND keep treating it as untrusted at read time**; a stored clean verdict is never a reason to trust it later. Batch where the API allows.
 - It sits behind the same provider interface and adapter layer (a `classify_injection` method), with a Fake implementation for CI.
 
-### 4.1 Interface (`app/llm/base.py`)
+### 4.1 Interface (`app/providers/base.py`)
 ```
 class LLMProvider(Protocol):
     def complete(self, req: LLMRequest) -> LLMResponse
@@ -163,19 +163,19 @@ class LLMProvider(Protocol):
 
 Design choice: **the structured-output contract is implemented in our code** (JSON schema in prompt, parse, validate with Pydantic, bounded repair retry), using native JSON mode / tool calling only as an optimization when the adapter reports support. This keeps behavior comparable across providers and with the Fake adapter.
 
-### 4.2 Adapters (`app/llm/adapters/`)
+### 4.2 Adapters (`app/providers/adapters/`)
 - `GroqAdapter`: OpenAI-compatible HTTP; `base_url` and key from env. Prefer plain `httpx` to the OpenAI-compatible endpoint over a vendor SDK (fewer dependencies; ask before adding the `openai` package).
 - `GeminiAdapter`: secondary, different request/response shape, translated to the same interface.
 - `FakeAdapter`: reads fixtures from `tests/fixtures/llm/`, **keyed by scenario ID + step index** (PM decision 2026-11-10). The prompt hash is stored in the fixture as a staleness check only: on mismatch the adapter logs a loud warning naming the scenario and step and still returns the fixture (not a silent miss, not a hard failure). A missing scenario/step raises `FixtureMissing` (never invents output). A `RECORD=1` mode, run manually with a real provider, writes new fixtures. Staleness warnings are counted and surfaced in the test summary.
 - Selection: `LLM_PROVIDER=groq|gemini|fake`, `LLM_MODEL=<id>`; model names appear only in `.env` and adapter defaults. A test greps the tree for vendor imports and model-name strings outside the adapter package and `.env.example`.
 
-### 4.3 Rate limiting and retry (`app/llm/ratelimit.py`)
+### 4.3 Rate limiting and retry (`app/providers/ratelimit.py`)
 - Token buckets per provider for requests/min and tokens/min (estimated from prompt size before the call, corrected from usage after). Limits come from config because free-tier values change.
 - A daily request counter persisted in Postgres (survives restarts); at the configured cap, calls fail fast with `QuotaExhausted`.
 - On HTTP 429 or 5xx: exponential backoff with full jitter, honoring `Retry-After`, capped at N attempts (default 4) and a total wall-time budget. Beyond that, raise `RateLimited`. Daily-quota 429s are distinguished from per-minute ones and are not retried.
 - Workflow mapping: any of these errors during intent classification gives a "service busy, try again" with state `FAILED`/`PENDING` and handoff offer; during explanation, the deterministic decision is still shown using a templated (non-model) message. No path produces a success claim.
 
-### 4.4 Cache (`app/llm/cache.py`)
+### 4.4 Cache (`app/providers/cache.py`)
 Key = `sha256(provider, model, canonical full prompt, temperature, tool_schema_version, prompt_template_version)`. Prompt template version is in the key so prompt drift produces a miss, not a stale hit. Stored in `llm_cache`. Modes: `read_write` (default), `replay_only` (miss raises `CacheMiss`, used by eval replays so reruns cost zero calls and are identical), `off`. Each lookup records hit/miss in `llm_calls` and the trace; eval reports include cache-hit rate. Responses with errors or invalid structure are not cached.
 
 ### 4.5 Request path
@@ -219,7 +219,7 @@ Order matters: cache sits **outside** the limiter, so hits consume no quota. The
 │   │   ├── auth/            sessions, current_customer dependency
 │   │   ├── domain/          models, rules/ (refund, cancel, shipping), money
 │   │   ├── workflow/        state machine, orchestrator, tool registry, caps
-│   │   ├── llm/             base.py, client.py, ratelimit.py, cache.py, adapters/
+│   │   ├── providers/       base.py, client.py, structured.py, ratelimit.py, cache.py, cost.py, adapters/
 │   │   ├── retrieval/       chunking, embedder, fts, vector, fusion, citations
 │   │   ├── observability/   tracing, cost
 │   │   └── db/              session, repositories
