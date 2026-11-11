@@ -72,6 +72,7 @@ All Docker images must build and run on `linux/arm64` (OCI Ampere A1). Flag any 
 - **Prompt Guard is detection only.** It must never be the control that blocks an action, and a negative result never relaxes a check. Auth, deterministic rules, and the single-use confirmation token are the only defenses.
 - **Paid-amount invariant:** total refunds per order can never exceed the amount actually paid, enforced in code and at the database, independent of policy text.
 - Policy version comes from the purchase date; the refund window is measured from delivery or presumed-lost date. Never conflate the two anchors.
+- **Inject the clock.** No module under `app/` (or `tests/`) may call `date.today()`, `datetime.now()` or `datetime.utcnow()`; business date logic takes a `Clock` (`app/clock.py`). Tests and evaluation pin `FixedClock` to `SIMULATED_TODAY` (2026-04-15). Token expiry deliberately stays on the database's `clock_timestamp()`; do not unify the two (SPEC 2.5). A test enforces this.
 - **LLM call budget: at most 2 calls per case** (extraction, explanation). A third needs PM approval.
 - **Fail closed on explanation mismatch:** the customer sees the rules engine's Decision, never the model's numbers; disagreement escalates to handoff.
 - FakeAdapter fixtures are keyed by scenario ID + step index; the prompt hash is a staleness warning only.

@@ -7,6 +7,7 @@ from pathlib import Path
 
 PRELUDE = """
 from datetime import date
+from app.clock import SIMULATED_TODAY
 from app.domain.types import PurchaseDate, WindowAnchorDate
 
 def refund_window_open(purchase: PurchaseDate, anchor: WindowAnchorDate, today: date) -> bool:
@@ -29,7 +30,7 @@ def test_correct_call_typechecks(tmp_path: Path) -> None:
     r = _mypy(
         tmp_path,
         """
-        refund_window_open(PurchaseDate(date(2026, 2, 20)), WindowAnchorDate(date(2026, 3, 10)), date.today())
+        refund_window_open(PurchaseDate(date(2026, 2, 20)), WindowAnchorDate(date(2026, 3, 10)), SIMULATED_TODAY)
     """,
     )
     assert r.returncode == 0, r.stdout
@@ -39,7 +40,7 @@ def test_swapped_arguments_are_rejected(tmp_path: Path) -> None:
     r = _mypy(
         tmp_path,
         """
-        refund_window_open(WindowAnchorDate(date(2026, 3, 10)), PurchaseDate(date(2026, 2, 20)), date.today())
+        refund_window_open(WindowAnchorDate(date(2026, 3, 10)), PurchaseDate(date(2026, 2, 20)), SIMULATED_TODAY)
     """,
     )
     assert r.returncode != 0 and "arg-type" in r.stdout
@@ -49,7 +50,7 @@ def test_plain_date_is_rejected(tmp_path: Path) -> None:
     r = _mypy(
         tmp_path,
         """
-        refund_window_open(date(2026, 2, 20), date(2026, 3, 10), date.today())
+        refund_window_open(date(2026, 2, 20), date(2026, 3, 10), SIMULATED_TODAY)
     """,
     )
     assert r.returncode != 0 and "arg-type" in r.stdout
