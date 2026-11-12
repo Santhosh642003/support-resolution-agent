@@ -16,6 +16,7 @@ from app.auth.context import CustomerContext
 from app.auth.sessions import SESSION_COOKIE, resolve_session
 from app.clock import Clock
 from app.config import get_settings
+from app.workflow.order_status import OrderStatusWorkflow
 
 
 def unauthenticated() -> HTTPException:
@@ -38,6 +39,39 @@ def get_engine(request: Request) -> Engine:
 def get_clock(request: Request) -> Clock:
     clock: Clock = request.app.state.clock
     return clock
+
+
+def get_write_conn(engine: Annotated[Engine, Depends(get_engine)]) -> Iterator[Connection]:
+    """A read-WRITE transaction for the one endpoint that records a conversation (/chat). It
+    commits when the request succeeds and rolls back on an error. It writes the record of the
+    conversation only; no business state is reachable from the workflow."""
+    with engine.begin() as conn:
+        yield conn
+
+
+def get_workflow(
+    request: Request, engine: Annotated[Engine, Depends(get_engine)]
+) -> "OrderStatusWorkflow":
+    wf: OrderStatusWorkflow | None = request.app.state.workflow
+    if wf is None:  # built lazily from settings so importing the app never loads a model
+        from app.providers.factory import ProviderConfigError, build_client, build_guard
+        from app.retrieval.embedder import OnnxBgeEmbedder
+        from app.retrieval.hybrid import HybridConfig
+
+        settings = get_settings()
+        try:
+            wf = OrderStatusWorkflow(
+                build_client(settings, engine),
+                OnnxBgeEmbedder(),
+                request.app.state.clock,
+                HybridConfig.from_settings(settings),
+                guard=build_guard(settings),
+                explanation_max_tokens=settings.llm_explanation_max_tokens,
+            )
+        except ProviderConfigError:
+            raise HTTPException(status_code=503, detail="assistant not configured") from None
+        request.app.state.workflow = wf
+    return wf
 
 
 def get_conn(engine: Annotated[Engine, Depends(get_engine)]) -> Iterator[Connection]:

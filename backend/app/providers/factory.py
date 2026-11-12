@@ -15,6 +15,7 @@ from app.providers.adapters.groq import GroqAdapter
 from app.providers.base import LLMProvider
 from app.providers.cache import CacheMode
 from app.providers.client import LLMClient
+from app.providers.guard import FakePromptGuard, GroqPromptGuard, PromptGuard
 from app.providers.ratelimit import RateLimiter
 
 
@@ -43,6 +44,21 @@ def build_adapter(settings: Settings) -> LLMProvider:
             raise ProviderConfigError("RECORD=1 needs LLM_FIXTURES_DIR")
         return RecordingAdapter(adapter, Path(settings.llm_fixtures_dir))
     return adapter
+
+
+def build_guard(settings: Settings) -> PromptGuard | None:
+    """Prompt Guard for the configured provider: Groq's classifier, a fake for tests, or None."""
+    if not settings.prompt_guard_enabled:
+        return None
+    if settings.llm_provider == "groq":
+        if settings.groq_api_key is None or not settings.groq_api_key.get_secret_value():
+            raise ProviderConfigError("LLM_PROVIDER=groq needs GROQ_API_KEY")
+        return GroqPromptGuard(
+            settings.groq_api_key.get_secret_value(), threshold=settings.prompt_guard_threshold
+        )
+    if settings.llm_provider == "fake":
+        return FakePromptGuard(threshold=settings.prompt_guard_threshold)
+    return None
 
 
 def build_client(settings: Settings, engine: Engine | None) -> LLMClient:

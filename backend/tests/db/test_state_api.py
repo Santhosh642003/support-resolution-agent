@@ -223,8 +223,9 @@ def test_no_route_parameter_request_body_or_response_field_names_a_customer(worl
         for method, op in ops.items():
             params = [p["name"].lower() for p in op.get("parameters", [])]
             assert not any("customer" in p for p in params), (path, method, params)
-            assert "requestBody" not in op, (path, method)  # read-only: no bodies at all
-            assert method == "get", (path, method)
+            if path != "/chat":  # the one write endpoint has its own walk (test_chat_api.py)
+                assert "requestBody" not in op, (path, method)  # read-only: no bodies at all
+                assert method == "get", (path, method)
     names = {k.lower() for k in _keys(schema["components"]["schemas"])}
     assert not any("customer" in n for n in names), sorted(n for n in names if "customer" in n)
 

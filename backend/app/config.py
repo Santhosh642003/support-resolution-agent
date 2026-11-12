@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     retrieval_fts_rank: Literal["rank", "rank_cd"] = "rank_cd"
     retrieval_fts_title_weight: bool = True
     retrieval_weight_vec: float = 1.0
+    # Prompt Guard (detection only; its own provider allowance, SPEC 4.0.1/4.0.3).
+    prompt_guard_enabled: bool = True
+    prompt_guard_threshold: float = 0.5
     # PROJECTED cost per 1k tokens (a paid-tier estimate, never incurred cost).
     llm_price_per_1k_in: float = 0.0
     llm_price_per_1k_out: float = 0.0
