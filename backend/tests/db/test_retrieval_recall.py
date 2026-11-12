@@ -6,12 +6,10 @@ If this fails because the corpus, the embedder or the retrieval code changed, re
 """
 
 import json
-from typing import Any
 
 import pytest
 from sqlalchemy import Connection
 
-from app.config import Settings
 from app.retrieval.embedder import OnnxBgeEmbedder
 from app.retrieval.ingest import ingest_policies
 from app.retrieval.policy_loader import load_policies
@@ -29,8 +27,7 @@ def test_the_recorded_recall_numbers_reproduce_exactly(
     conn: Connection, embedder: OnnxBgeEmbedder
 ) -> None:
     ingest_policies(conn, embedder, load_policies())
-    settings: Any = Settings
-    default_k = settings(_env_file=None).retrieval_k
+    default_k = 7  # the k in force when the round-1 numbers were recorded; not today's default
     fresh = measure(conn, embedder, default_k)
     recorded = json.loads(RESULTS.read_text(encoding="utf-8"))
     fresh.pop("protocol", None)

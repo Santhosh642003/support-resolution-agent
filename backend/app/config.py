@@ -43,11 +43,12 @@ class Settings(BaseSettings):
     # yields an EMPTY reply (finish_reason 'length'), which is treated as a failure.
     llm_explanation_max_tokens: int = 1500
     # Hybrid retrieval (app/retrieval/hybrid.py). Configuration, not constants in the code.
-    # retrieval_k=7: the smallest k meeting the pre-registered rule R3 for the system R2 selected
-    # (SPEC 7.3). Fusion weights stay at equal (1.0, 1.0): R2's tie-break chose vector-only on a
-    # saturated comparison; that outcome is reported, not applied, pending a PM decision (SPEC 7.3).
-    # candidates >= k so each leg can supply a full top-k; the RRF constant is an untuned default.
-    retrieval_k: int = 7
+    # retrieval_k=6 (PM, 2026-11-13): the smallest k at which the pre-registered rule R3 is met by
+    # the system we kept (equal-weight hybrid). Held-out scored 2 queries better at k=7 (29/32
+    # against 27/32); that was deliberately NOT used. Fusion weights are unchanged: the registered
+    # fusion rule could not discriminate (ceiling effect), so no change was made (SPEC 7.3).
+    # Candidates >= k so each leg can supply a full top-k; the RRF constant is untuned.
+    retrieval_k: int = 6
     retrieval_candidates: int = 20
     retrieval_rrf_k: int = 60
     retrieval_weight_fts: float = 1.0

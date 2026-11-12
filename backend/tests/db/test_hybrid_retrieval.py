@@ -5,6 +5,7 @@ tests prove it from the legs' own output (a wrong-version clause is not in eithe
 cannot be fused), and they take the first real recall measurement for the eight seeded cases.
 """
 
+import dataclasses
 from datetime import date
 from math import comb
 
@@ -202,18 +203,33 @@ def _purchase_date(case_key: str) -> PurchaseDate:
     return pd(ORDER_DATE.get(case_key) or SUB_DATE[case_key])
 
 
+DEV_SET_K = 7  # the k of the original dev-set measurement (SPEC 7.1); the default is now 6
+
+
 def test_for_each_seeded_case_the_clauses_a_correct_decision_needs_are_in_the_top_k(
     corpus: Connection, embedder: OnnxBgeEmbedder
 ) -> None:
+    """The original 16-query dev set on the original 19-clause corpus. At the k it was measured at
+    (7) every needed clause is retrieved; at today's default k (6) exactly one query falls short,
+    which is what the recorded curve says (15 of 16)."""
+    dev_cfg = dataclasses.replace(CFG, k=DEV_SET_K)
     missing: list[str] = []
+    short_at_default = 0
     for case in CASES:
         types = policy_types_for(case.intents, delivery_issue=case.delivery_issue)
         for q in case.queries:
-            res = retrieve(corpus, embedder, q, _purchase_date(case.case_key), types, CFG)
-            got = {r.clause.chunk_key for r in res.clauses}
+            d = _purchase_date(case.case_key)
+            got = {
+                r.clause.chunk_key for r in retrieve(corpus, embedder, q, d, types, dev_cfg).clauses
+            }
             if not case.needed <= got:
                 missing.append(f"{case.case_key}: missing {sorted(case.needed - got)} for {q!r}")
+            got6 = {
+                r.clause.chunk_key for r in retrieve(corpus, embedder, q, d, types, CFG).clauses
+            }
+            short_at_default += not case.needed <= got6
     assert not missing, "\n".join(missing)
+    assert CFG.k == 6 and short_at_default == 1
 
 
 def test_recall_curve_is_reproducible_and_beats_random_only_slightly(
@@ -249,7 +265,7 @@ def test_recall_curve_is_reproducible_and_beats_random_only_slightly(
 
     measured = {k: full_recall(k) for k in range(1, 9)}
     assert measured == {1: 2, 2: 7, 3: 9, 4: 12, 5: 13, 6: 15, 7: 16, 8: 16}
-    assert measured[CFG.k] == 16  # the configured k retrieves everything needed, on the dev set
+    assert measured[DEV_SET_K] == 16 and measured[CFG.k] == 15  # k=7 retrieves everything; k=6 not
     # where it matters (small k), hybrid is at or above the random baseline at k=1..4, 6, 7
     for k in (1, 2, 3, 4, 6, 7):
         assert measured[k] >= random_expectation(k) - 0.5, k
