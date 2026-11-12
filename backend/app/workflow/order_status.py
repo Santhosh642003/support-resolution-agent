@@ -50,7 +50,12 @@ from app.retrieval.policy_store import PolicyClause, clauses_by_key, policy_vers
 from app.retrieval.scope import decide_scope, scope_facts_from_state
 from app.workflow import templates
 from app.workflow.determination import Determination, input_state_of, persist_determination
-from app.workflow.explanation import Explanation, explanation_request, verify_explanation
+from app.workflow.explanation import (
+    Explanation,
+    commitment_phrases,
+    explanation_request,
+    verify_explanation,
+)
 from app.workflow.extraction import Extraction, candidate_order_numbers, extraction_request
 from app.workflow.state_machine import State, StateMachine
 from app.workflow.tools import PER_CONVERSATION_CAP, PER_TURN_CAP, ToolCapExceeded, ToolRegistry
@@ -475,7 +480,7 @@ class OrderStatusWorkflow:
             }
             machine.to(State.ANSWERED, f"explanation unavailable: {type(exc).__name__}")
             return out(
-                templates.status_text(det),
+                f"{templates.status_text(det)} {templates.closing_line(det.outcome, False)}".strip(),
                 degraded=True,
                 answer_reason=ReasonCode.MODEL_UNAVAILABLE.value,
             )
@@ -485,6 +490,7 @@ class OrderStatusWorkflow:
             "model_cited": exp.parsed.cited_clause_keys,
             "attempts": exp.attempts,
             "problems": problems,
+            "commitment_phrases": commitment_phrases(exp.parsed.explanation_text),
             "accepted": not problems,
             "llm": _llm_entry(exp.raw.trace),
         }
@@ -501,7 +507,8 @@ class OrderStatusWorkflow:
                 },
             )
         machine.to(State.ANSWERED, "explanation verified")
-        return out(exp.parsed.explanation_text)
+        closing = templates.closing_line(det.outcome, handoff_raised=False)
+        return out(f"{exp.parsed.explanation_text.strip()} {closing}".strip())
 
     # ------------------------------------------------------------------------------------------
     def _scan(self, message: str) -> GuardVerdict:

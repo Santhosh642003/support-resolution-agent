@@ -58,6 +58,30 @@ def status_text(det: Determination) -> str:
     return template.format_map({**facts, "order_number": det.order_number})
 
 
+# What happens next is a fact about the SYSTEM, so it is chosen here by outcome, never written by
+# the model (F-009). Order status is read-only here: nothing is scheduled or monitored,
+# nothing is changed. A line that says so is true; a promise would not be.
+_NO_UPDATES = (
+    "This demo does not send automatic updates; ask me again any time for the latest status."
+)
+_NO_CHANGE = "No refund, replacement or other change has been made to your order or account."
+_CLOSING = {
+    "in_transit_on_schedule": _NO_UPDATES,
+    "late": _NO_UPDATES,
+    "delivery_exception": _NO_UPDATES,
+    "presumed_lost": _NO_CHANGE,
+}  # delivered, delivered_digital, not_shipped, canceled: nothing further, so nothing is said
+
+
+def closing_line(outcome: str, handoff_raised: bool) -> str:
+    """The deterministic next-steps line, chosen by the outcome and by whether a handoff that the
+    customer is being told about was raised. A review flag raised by Prompt Guard is internal and
+    is not a handoff the customer is promised anything about, so callers pass False for it."""
+    if handoff_raised:
+        return handoff_notice()
+    return _CLOSING.get(outcome, "")
+
+
 def handoff_notice() -> str:
     return "I have passed this to a member of our team, who will follow up with you."
 

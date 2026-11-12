@@ -129,7 +129,11 @@ def test_model_calls_use_the_specified_effort_and_token_cap(
     )
     first, second = adapter.requests
     assert (first.context.step, first.reasoning_effort) == (0, "low")  # extraction: low effort
-    assert (second.context.step, second.reasoning_effort, second.max_tokens) == (1, None, 1500)
+    assert (second.context.step, second.reasoning_effort, second.max_tokens) == (
+        1,
+        "low",
+        1500,
+    )  # SPEC 4.0.4
     assert first.temperature == second.temperature == 0.0
 
 
@@ -726,11 +730,11 @@ def test_the_workflow_never_writes_business_state(
 
     def snapshot() -> list[Any]:
         return [
-            [
+            sorted(  # the helper has no ORDER BY: compare the rows, not their heap order
                 tuple(r)
                 for r in fetch_rows(world, "orders", scope, "id, status, refunded_total_cents")
-            ],
-            [tuple(r) for r in fetch_rows(world, "subscriptions", scope, "id, status")],
+            ),
+            sorted(tuple(r) for r in fetch_rows(world, "subscriptions", scope, "id, status")),
             count_rows(world, "refunds", scope),
             count_rows(world, "actions", scope),
         ]
@@ -794,3 +798,31 @@ def test_the_decisive_and_supporting_roles_are_persisted_and_reported(
     assert r.determination["decisive_clause_keys"] == [C2] and r.determination[
         "supporting_clause_keys"
     ] == [C1]
+
+
+def test_a_model_written_commitment_fails_closed_and_is_recorded_separately_end_to_end(
+    world: Connection, embedder: OnnxBgeEmbedder
+) -> None:
+    """F-009: a body that promises follow-up is rejected even though its outcome, citations and
+    dates are all correct, and the promise is never shown to the customer."""
+    promise = explanation_reply(
+        "presumed_lost",
+        [C2],
+        "It shipped on 2026-03-11 and is presumed lost. We'll keep monitoring and let you know.",
+    )
+    r = lost_turn(world, embedder, promise)
+    assert r.state is State.HANDED_OFF and r.handoff_reason == "EXPLANATION_MISMATCH"
+    assert any("unbacked commitment" in p for p in r.trace["explanation"]["problems"])
+    assert r.trace["explanation"]["commitment_phrases"]  # counted apart from citation problems
+    assert "let you know" not in r.reply and "monitoring" not in r.reply
+
+
+def test_an_answered_reply_ends_with_the_deterministic_line_for_its_outcome(
+    world: Connection, embedder: OnnxBgeEmbedder
+) -> None:
+    ok = explanation_reply("presumed_lost", [C2], "It shipped on 2026-03-11 and is presumed lost.")
+    r = lost_turn(world, embedder, ok)
+    assert r.state is State.ANSWERED
+    body, notice = r.reply.split("\n\n(This is a SIMULATED")[0], "No refund, replacement"
+    assert body.startswith("It shipped on 2026-03-11 and is presumed lost.")
+    assert body.count(notice) == 1 and body.endswith("or account.")
