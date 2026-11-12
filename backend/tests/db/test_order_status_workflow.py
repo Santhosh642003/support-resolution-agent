@@ -586,11 +586,11 @@ def test_the_per_turn_tool_cap_hands_off_before_exceeding(
     world: Connection, embedder: OnnxBgeEmbedder
 ) -> None:
     adapter = ScriptedAdapter([extraction_reply("SIM-2001")])
-    r = build_workflow(adapter, embedder, per_turn_tools=3).run_turn(
+    r = build_workflow(adapter, embedder, per_turn_tools=1).run_turn(
         world, CTX["blair"], "Where is my order SIM-2001?"
     )
     assert r.state is State.HANDED_OFF and r.handoff_reason == "TOOL_CAP_EXCEEDED"
-    assert r.tool_calls == 3 and len(r.trace["tools"]) == 3
+    assert r.tool_calls == 1 and len(r.trace["tools"]) == 1
 
 
 def test_a_normal_turn_uses_no_more_than_eight_tool_calls(
@@ -600,12 +600,15 @@ def test_a_normal_turn_uses_no_more_than_eight_tool_calls(
         world, CTX["blair"], "Where is my order SIM-2002?", scenario_id="os_replacement"
     )
     assert 1 <= r.tool_calls <= 8 and all(t["ok"] for t in r.trace["tools"])
+    # counted by capability, not by SQL statement (SPEC 10.5): two reads on the whole path
+    assert [t["tool"] for t in r.trace["tools"]] == ["get_order_snapshot", "policy_context"]
+    assert all(t["kind"] == "read" for t in r.trace["tools"])
 
 
 def test_the_per_conversation_cap_accumulates_across_turns(
     world: Connection, embedder: OnnxBgeEmbedder
 ) -> None:
-    wf = build_workflow(InspectableFake(), embedder, per_conversation_tools=9)
+    wf = build_workflow(InspectableFake(), embedder, per_conversation_tools=3)
     first = wf.run_turn(
         world, CTX["blair"], "Where is my order SIM-2001?", scenario_id="os_presumed_lost"
     )
@@ -625,7 +628,7 @@ def test_the_per_conversation_cap_accumulates_across_turns(
     used = q(
         world, "SELECT tool_calls_used FROM conversations WHERE id = :i", i=first.conversation_id
     )[0].tool_calls_used
-    assert used == first.tool_calls + second.tool_calls <= 9
+    assert used == first.tool_calls + second.tool_calls <= 3
 
 
 # --- the conversation record and the state machine's footprint ----------------------------------------------------------

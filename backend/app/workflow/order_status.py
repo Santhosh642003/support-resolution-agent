@@ -45,8 +45,8 @@ from app.providers.client import CallBudget, LLMClient
 from app.providers.guard import GuardVerdict, PromptGuard
 from app.repositories import state as repo
 from app.retrieval.embedder import Embedder
-from app.retrieval.hybrid import HybridConfig, RetrievalResult, retrieve
-from app.retrieval.policy_store import PolicyClause, clauses_by_key, policy_version_in_effect
+from app.retrieval.hybrid import HybridConfig, RetrievalResult
+from app.retrieval.policy_store import PolicyClause
 from app.retrieval.scope import decide_scope, scope_facts_from_state
 from app.workflow import templates
 from app.workflow.determination import Determination, input_state_of, persist_determination
@@ -57,6 +57,7 @@ from app.workflow.explanation import (
     verify_explanation,
 )
 from app.workflow.extraction import Extraction, candidate_order_numbers, extraction_request
+from app.workflow.policy_context import policy_context
 from app.workflow.state_machine import State, StateMachine
 from app.workflow.tools import PER_CONVERSATION_CAP, PER_TURN_CAP, ToolCapExceeded, ToolRegistry
 
@@ -322,16 +323,16 @@ class OrderStatusWorkflow:
 
         # ---- resolve the order in CODE, among this customer's own orders ----------------------------
         candidates = candidate_order_numbers(ext.order_number, message)
-        order = None
-        for number in candidates:
-            order = tools.call("get_order", repo.get_order, conn, ctx, number)
-            if order is not None:
+        snap = None
+        for number in candidates:  # one consistent snapshot per candidate, at most two (SPEC 10.5)
+            snap = tools.call("get_order_snapshot", repo.order_snapshot, conn, ctx, number)
+            if snap is not None:
                 break
         trace["resolution"] = {
             "candidates": candidates,
-            "matched": None if order is None else order.order_number,
+            "matched": None if snap is None else snap.order.order_number,
         }
-        if order is None:
+        if snap is None:
             if candidates:  # not found and not yours are indistinguishable
                 machine.to(State.ANSWERED, "order not found")
                 return _Out(
@@ -344,19 +345,10 @@ class OrderStatusWorkflow:
                 answer_reason=ReasonCode.ORDER_NOT_IDENTIFIED.value,
             )
 
-        # ---- fetch live state ---------------------------------------------------------------------------
-        ship = tools.call("fetch_shipment", repo.shipment_of, conn, ctx, order.id)
-        events = (
-            tools.call("fetch_events", repo.shipment_events, conn, ctx, ship.id) if ship else []
-        )
-        categories = frozenset(
-            tools.call("fetch_categories", repo.categories_of_order, conn, ctx, order.id)
-        )
+        # ---- live state: already read as one snapshot ---------------------------------------------------
+        order = snap.order
+        ship, categories = snap.shipment, snap.categories
         purchase = PurchaseDate(order.purchase_date)
-        found_version = tools.call(
-            "policy_version", policy_version_in_effect, conn, "shipping", purchase
-        )
-        version = 0 if found_version is None else found_version[0]
         shipped_on = _on(ship.shipped_at) if ship else None
         delivered_on = _on(ship.delivered_at) if ship else None
         inp = OrderStatusInput(
@@ -372,8 +364,7 @@ class OrderStatusWorkflow:
                 shipped_on,
                 delivered_on,
                 _on(ship.expected_at),
-                str(ship.status) == "exception"
-                or any(e.code == "DELIVERY_EXCEPTION" for e in events),
+                str(ship.status) == "exception" or "DELIVERY_EXCEPTION" in snap.event_codes,
             ),
         )
         machine.to(State.DATA_FETCHED, f"order {order.order_number}")
@@ -389,17 +380,18 @@ class OrderStatusWorkflow:
             today,
         )
         scope = decide_scope(["order_status"], facts)
-        retrieved: RetrievalResult = tools.call(
-            "retrieve_policy",
-            retrieve,
+        pctx = tools.call(
+            "policy_context",
+            policy_context,
             conn,
             self._embedder,
             message,
             purchase,
-            scope.types,
+            scope,
             self._hybrid,
-            scope=scope,
         )
+        retrieved: RetrievalResult = pctx.retrieved
+        version = pctx.version
         trace["scope"] = {
             "types": list(scope.types),
             "included": scope.included,
@@ -427,7 +419,7 @@ class OrderStatusWorkflow:
         applied: list[PolicyClause] = []
         keys = result.applied_clause_keys
         if keys:
-            applied = tools.call("fetch_clauses", clauses_by_key, conn, keys)
+            applied = [pctx.clauses[k] for k in keys if k in pctx.clauses]
             if len(applied) != len(keys):  # the cited clauses must exist; otherwise refuse to guess
                 result = OrderStatusResult(
                     OrderStatusOutcome.NEEDS_HUMAN,

@@ -5,6 +5,8 @@ here that takes a customer id from anywhere else, and none that can read another
 "Not found" and "not yours" are the same result (None / empty), so callers cannot tell them apart.
 """
 
+from dataclasses import dataclass
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import Connection, Row, text
@@ -140,3 +142,64 @@ def get_subscription(
         ),
         {"c": ctx.customer_id, "i": subscription_id},
     ).one_or_none()
+
+
+@dataclass(frozen=True)
+class ShipmentSnapshot:
+    id: UUID
+    status: str
+    shipped_at: datetime | None
+    expected_at: datetime | None
+    delivered_at: datetime | None
+
+
+@dataclass(frozen=True)
+class OrderSnapshot:
+    """One order and everything the order-status rules read about it, from ONE statement."""
+
+    order: Row[tuple[object, ...]]
+    shipment: ShipmentSnapshot | None
+    event_codes: tuple[str, ...]
+    categories: frozenset[str]
+
+
+def order_snapshot(
+    conn: Connection, ctx: CustomerContext, order_number: str
+) -> OrderSnapshot | None:
+    """The order, its shipment, its shipment event codes and its product categories as one
+    CONSISTENT view. Four separate reads could observe four different states if a row changed
+    between them; a single statement sees one snapshot, which matters more once writes exist.
+    Still filters `customer_id = :c` on every table, as the second control behind RLS."""
+    row = conn.execute(
+        text(
+            f"SELECT {_ORDER_COLS},"  # noqa: S608 (constants)
+            " s.id AS ship_id, s.status AS ship_status, s.shipped_at, s.expected_at,"
+            " s.delivered_at,"
+            " ARRAY(SELECT e.code FROM shipment_events e WHERE e.customer_id = :c"
+            "   AND e.shipment_id = s.id ORDER BY e.occurred_at, e.id) AS event_codes,"
+            " ARRAY(SELECT DISTINCT p.category FROM order_items i"
+            "   JOIN products p ON p.id = i.product_id"
+            "   WHERE i.customer_id = :c AND i.order_id = o.id) AS categories"
+            " FROM orders o"
+            " LEFT JOIN orders orig ON orig.id = o.replacement_for_order_id"
+            "   AND orig.customer_id = o.customer_id"
+            " LEFT JOIN shipments s ON s.order_id = o.id AND s.customer_id = o.customer_id"
+            " WHERE o.customer_id = :c AND o.order_number = :n"
+        ),
+        {"c": ctx.customer_id, "n": order_number},
+    ).one_or_none()
+    if row is None:
+        return None
+    ship = (
+        None
+        if row.ship_id is None
+        else ShipmentSnapshot(
+            row.ship_id, str(row.ship_status), row.shipped_at, row.expected_at, row.delivered_at
+        )
+    )
+    return OrderSnapshot(
+        order=row,
+        shipment=ship,
+        event_codes=tuple(row.event_codes or ()),
+        categories=frozenset(row.categories or ()),
+    )
