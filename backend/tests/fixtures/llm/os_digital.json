@@ -1,0 +1,31 @@
+{
+  "scenario_id": "os_digital",
+  "steps": [
+    {
+      "step": 0,
+      "response": {
+        "text": "{\"intent\": \"order_status\", \"order_number\": \"SIM-3002\", \"confidence\": 0.97, \"customer_claims\": []}",
+        "usage": {
+          "prompt_tokens": 330,
+          "completion_tokens": 55,
+          "total_tokens": 385,
+          "reasoning_tokens": 27
+        },
+        "finish_reason": "stop"
+      }
+    },
+    {
+      "step": 1,
+      "response": {
+        "text": "{\"outcome\": \"delivered_digital\", \"cited_clause_keys\": [], \"explanation_text\": \"Order SIM-3002 is a digital order, so there is nothing to ship: it was delivered to you when you bought it.\"}",
+        "usage": {
+          "prompt_tokens": 640,
+          "completion_tokens": 210,
+          "total_tokens": 850,
+          "reasoning_tokens": 105
+        },
+        "finish_reason": "stop"
+      }
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "scenario_id": "os_delivered",
+  "steps": [
+    {
+      "step": 0,
+      "response": {
+        "text": "{\"intent\": \"order_status\", \"order_number\": \"SIM-1001\", \"confidence\": 0.97, \"customer_claims\": []}",
+        "usage": {
+          "prompt_tokens": 330,
+          "completion_tokens": 55,
+          "total_tokens": 385,
+          "reasoning_tokens": 27
+        },
+        "finish_reason": "stop"
+      }
+    },
+    {
+      "step": 1,
+      "response": {
+        "text": "{\"outcome\": \"delivered\", \"cited_clause_keys\": [\"shipping-v1-clause-1\"], \"explanation_text\": \"Good news: order SIM-1001 was delivered on 2026-03-18. Our shipping policy expects delivery within 7 business days of shipping, which for this order meant by 2026-03-24, so it arrived inside that window.\"}",
+        "usage": {
+          "prompt_tokens": 640,
+          "completion_tokens": 210,
+          "total_tokens": 850,
+          "reasoning_tokens": 105
+        },
+        "finish_reason": "stop"
+      }
+    }
+  ]
+}

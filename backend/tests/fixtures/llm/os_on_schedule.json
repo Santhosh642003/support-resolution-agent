@@ -1,0 +1,31 @@
+{
+  "scenario_id": "os_on_schedule",
+  "steps": [
+    {
+      "step": 0,
+      "response": {
+        "text": "{\"intent\": \"order_status\", \"order_number\": \"SIM-2003\", \"confidence\": 0.97, \"customer_claims\": []}",
+        "usage": {
+          "prompt_tokens": 330,
+          "completion_tokens": 55,
+          "total_tokens": 385,
+          "reasoning_tokens": 27
+        },
+        "finish_reason": "stop"
+      }
+    },
+    {
+      "step": 1,
+      "response": {
+        "text": "{\"outcome\": \"in_transit_on_schedule\", \"cited_clause_keys\": [\"shipping-v1-clause-1\", \"shipping-v1-clause-2\"], \"explanation_text\": \"Order SIM-2003 shipped on 2026-04-13 and is on its way. It is expected by 2026-04-22 and is not treated as lost unless it has not arrived by 2026-04-27.\"}",
+        "usage": {
+          "prompt_tokens": 640,
+          "completion_tokens": 210,
+          "total_tokens": 850,
+          "reasoning_tokens": 105
+        },
+        "finish_reason": "stop"
+      }
+    }
+  ]
+}

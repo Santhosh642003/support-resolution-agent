@@ -1,0 +1,31 @@
+{
+  "scenario_id": "os_exception",
+  "steps": [
+    {
+      "step": 0,
+      "response": {
+        "text": "{\"intent\": \"order_status\", \"order_number\": \"SIM-3001\", \"confidence\": 0.97, \"customer_claims\": [\"the tracking page says it is out for delivery\"]}",
+        "usage": {
+          "prompt_tokens": 330,
+          "completion_tokens": 55,
+          "total_tokens": 385,
+          "reasoning_tokens": 27
+        },
+        "finish_reason": "stop"
+      }
+    },
+    {
+      "step": 1,
+      "response": {
+        "text": "{\"outcome\": \"delivery_exception\", \"cited_clause_keys\": [\"shipping-v1-clause-1\", \"shipping-v1-clause-2\"], \"explanation_text\": \"The carrier has reported a delivery problem with order SIM-3001, which shipped on 2026-04-02. It is not yet treated as lost; that happens if it has not arrived by 2026-04-16.\"}",
+        "usage": {
+          "prompt_tokens": 640,
+          "completion_tokens": 210,
+          "total_tokens": 850,
+          "reasoning_tokens": 105
+        },
+        "finish_reason": "stop"
+      }
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "scenario_id": "os_presumed_lost",
+  "steps": [
+    {
+      "step": 0,
+      "response": {
+        "text": "{\"intent\": \"order_status\", \"order_number\": \"SIM-2001\", \"confidence\": 0.97, \"customer_claims\": []}",
+        "usage": {
+          "prompt_tokens": 330,
+          "completion_tokens": 55,
+          "total_tokens": 385,
+          "reasoning_tokens": 27
+        },
+        "finish_reason": "stop"
+      }
+    },
+    {
+      "step": 1,
+      "response": {
+        "text": "{\"outcome\": \"presumed_lost\", \"cited_clause_keys\": [\"shipping-v1-clause-1\", \"shipping-v1-clause-2\"], \"explanation_text\": \"I'm sorry: order SIM-2001 shipped on 2026-03-11 and was expected by 2026-03-20. It has not arrived, and since 2026-03-25 (ten business days after it shipped) our policy treats an undelivered shipment as lost, so it is now presumed lost.\"}",
+        "usage": {
+          "prompt_tokens": 640,
+          "completion_tokens": 210,
+          "total_tokens": 850,
+          "reasoning_tokens": 105
+        },
+        "finish_reason": "stop"
+      }
+    }
+  ]
+}
