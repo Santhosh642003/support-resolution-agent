@@ -139,7 +139,13 @@ class LLMClient:
             native = "json_object"
         if native == "json_object" and not self.adapter.capabilities.json_mode:
             native = "none"
-        shaped = with_schema_instructions(req, schema).model_copy(
+        # With strict native json_schema the provider enforces the shape, so the schema is NOT also
+        # written into the prompt too (that duplicate cost about 130 tokens a call, SPEC 4.0.4). Our
+        # own parse and validation still always run, and if the provider rejects the native hint
+        # the schema is added to the prompt for the retry (see _fresh): the contract never depends
+        # on the hint.
+        base = req if native == "json_schema" else with_schema_instructions(req, schema)
+        shaped = base.model_copy(
             update={
                 "native_json": native,
                 "native_schema": strict_json_schema(schema.model_json_schema())
@@ -261,6 +267,8 @@ class LLMClient:
                     "native JSON hint rejected (400); retrying once without it. provider said: %s",
                     exc.detail or exc,
                 )
+                if current.native_json == "json_schema" and schema is not None:
+                    current = with_schema_instructions(current, schema)  # it was not in the prompt
                 current = current.model_copy(update={"native_json": "none", "native_schema": None})
                 resp = self._dispatch(current, state)
             if schema is None:

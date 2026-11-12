@@ -52,14 +52,31 @@ def strict_json_schema(schema: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def compact_schema_text(schema: type[BaseModel]) -> str:
+    """The JSON Schema as the prompt carries it: no `title` or `default` keywords (they name things
+    the property keys already name), no whitespace. Every constraint the validator enforces is kept.
+    Measured at about a third fewer prompt tokens than the pretty form (SPEC 4.0.4)."""
+
+    def walk(node: Any, in_properties: bool = False) -> Any:
+        if isinstance(node, dict):
+            return {
+                k: walk(v, in_properties=(k == "properties"))
+                for k, v in node.items()
+                if in_properties or k not in ("title", "default")
+            }
+        if isinstance(node, list):
+            return [walk(v) for v in node]
+        return node
+
+    return json.dumps(walk(schema.model_json_schema()), sort_keys=True, separators=(",", ":"))
+
+
 def with_schema_instructions(req: LLMRequest, schema: type[BaseModel]) -> LLMRequest:
     """Append the contract to the conversation as a system message. Untrusted text (customer
     messages, retrieved policy) stays in its own messages; this message only carries the format."""
     instruction = (
-        "Reply with exactly ONE JSON object that conforms to the JSON Schema below. "
-        "Output only that JSON: no prose, no markdown fences, no comments. "
-        "Do not add properties the schema does not define.\n\nJSON Schema:\n"
-        + json.dumps(schema.model_json_schema(), sort_keys=True)
+        "Reply with exactly ONE JSON object that conforms to this JSON Schema, and nothing else "
+        "(no prose, no markdown fences, no extra properties):\n" + compact_schema_text(schema)
     )
     return req.model_copy(
         update={"messages": (*req.messages, Message(role="system", content=instruction))}

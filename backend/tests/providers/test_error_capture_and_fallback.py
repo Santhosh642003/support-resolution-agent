@@ -122,7 +122,11 @@ def test_a_rejected_native_hint_is_retried_once_without_it_and_counted() -> None
     assert a.requests[1].native_json == "none" and a.requests[1].native_schema is None
     assert r.raw.trace is not None and r.raw.trace.native_fallbacks == 1
     assert budget.used == 1  # the rejected attempt produced no output: not an LLM call
-    assert a.requests[1].messages == a.requests[0].messages  # same prompt, contract unchanged
+    # with the native hint the schema is not duplicated in the prompt; the retry puts it there, so
+    # the contract is carried either way
+    first, second = a.requests[0].messages, a.requests[1].messages
+    assert all("JSON Schema" not in m.content for m in first)
+    assert second[: len(first)] == first and "JSON Schema" in second[-1].content
 
 
 def test_the_fallback_happens_at_most_once_and_the_second_error_is_reported() -> None:
