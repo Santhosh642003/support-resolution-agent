@@ -67,7 +67,7 @@ Single action status flow is `pending` to `succeeded|failed` only; a final actio
 ### 2.2 Ownership (customer_id on the row)
 - Every customer-scoped table carries `customer_id NOT NULL`. Child tables reference the parent by a **composite foreign key `(parent_id, customer_id)`**, so a child row cannot name a different customer than its parent (tested: `order_items_owner_fk`, `actions_decision_owner_fk`).
 - **Where the filter is applied:** the application layer, in the repository functions, which take a `CustomerContext` built from the authenticated session and add `WHERE customer_id = :ctx_customer` to every customer-scoped query (never from model output). Not-found and not-yours return the same 404.
-- **How a missing filter is caught:** (1) a schema test fails if any customer-scoped table lacks `customer_id NOT NULL`; (2) cross-customer integration tests (adversarial family 1) run against every repository function and assert zero rows/404 for another customer's IDs; (3) writes cannot cross customers regardless, thanks to the composite FKs. **Not enforced by the database today:** a missing `WHERE` on a *read* would not be stopped by the database. Row-level security with a non-superuser app role would close that gap (proposed for M2 hardening; see the task report).
+- **How a missing filter is caught:** (1) a schema test fails if any customer-scoped table lacks `customer_id NOT NULL`; (2) cross-customer integration tests (adversarial family 1) run against every repository function and assert zero rows/404 for another customer's IDs; (3) writes cannot cross customers regardless, thanks to the composite FKs. (4) **Enforced by the database (SPEC 17, built):** a missing `WHERE` on a read returns only the current customer's rows, because the application role is subject to row-level security; the repository filters stay as the first layer.
 
 ### 2.3 Drift assertion
 `orders.refunded_total_cents` and `order_items.refunded_cents` are denormalized. `v_refund_drift` recomputes `SUM(refunds.amount_cents)` per order; `v_refund_line_drift` checks each item's total against its lines and each order's total against the sum of all its lines. `assert_no_refund_drift()` (`app/db/invariants.py`) raises if either level disagrees. It runs in CI against seeded data and again after each evaluation suite run.
@@ -755,27 +755,61 @@ Monday to Friday, no holiday calendar. The rule lives in **one module** (`app/do
 
 The shipping restrictions policy gives timelines that differ from the general shipping policy for some product categories (for example hazardous goods: a 14 business day delivery window and presumed lost after 20 business days, against 7 and 10 in the general policy; perishables 3 and 5; oversize 21). The general policy does not say which governs a hazardous item. **This is unresolved and is carried to the rules task (M2) so it does not get lost.** Until then the order-status rule refuses to guess: an undelivered order containing a hazardous, perishable, oversize or age-restricted item yields `needs_human` with reason code `CATEGORY_TIMELINE_NOT_IMPLEMENTED` and is handed off (a delivered one is a fact and needs no timeline). No such order is seeded, deliberately, so the conflict is not baked into data before it is decided. The state API's `presumed_lost_on` and `is_presumed_lost` also use the general window for every order; they are factual date derivations, not determinations, but they will need to follow whatever is decided.
 
-## 17. Row-level security and database roles (M2 task 0, PM-approved 2026-11-10)
+## 17. Row-level security and database roles (M2 task 0; built 2026-11-14)
 
-Converts ownership (requirement g) from convention to enforcement and addresses section 2.7. Done at the start of M2, before repositories multiply. Each of the four points below is a way RLS silently does nothing.
+Converts ownership (requirement g) from convention to enforcement and closes the gap recorded in section 2.7. Built at the start of M2, before repositories multiply. **Status: implemented, migration 0012, 23 tests in `tests/db/test_rls.py`, all isolation tests connecting as the application role.** RLS is a second, independent control: the repository-layer `CustomerContext` and its `customer_id = :c` filters stay, so a missing WHERE now fails at the database as well as in a test, and both layers are present. Each of the four points below is a way RLS silently does nothing.
 
 ### 17.1 Roles: who owns what
 | Role | Purpose | Attributes |
 |---|---|---|
-| bootstrap superuser (compose `POSTGRES_USER`, OCI admin) | creates databases and roles only; never used by the app or by tests | superuser |
-| `support_owner` | owns all tables, runs Alembic migrations | `LOGIN`, not superuser, `NOBYPASSRLS` |
-| `support_app` | the application's runtime role | `LOGIN`, `NOSUPERUSER`, `NOBYPASSRLS`, **not the owner** of any table; grants limited to the DML it needs (SELECT/INSERT/UPDATE per table as required; no DELETE, TRUNCATE, DDL, or trigger control; no TRIGGER privilege) |
-Superusers and table owners bypass RLS, so the app role must be neither.
+| bootstrap superuser (compose `POSTGRES_USER`, OCI admin) | creates roles and databases; **seeds data** (seeding writes every customer's rows, which RLS forbids to every role without BYPASSRLS); never used by the app | superuser |
+| `support_owner` | owns the database and every table and view; runs Alembic | `LOGIN`, `NOSUPERUSER`, `NOBYPASSRLS` |
+| `support_app` | the application at runtime | `LOGIN`, `NOSUPERUSER`, `NOBYPASSRLS`, owns **nothing**; DML grants given explicitly per table by the migrations (17.4) |
 
-### 17.2 Policies
-- `ENABLE ROW LEVEL SECURITY` and `FORCE ROW LEVEL SECURITY` on every customer-scoped table (force is defense in depth against a future ownership mistake). Policy: `customer_id = current_setting('app.current_customer_id', true)::uuid`. An unset setting yields NULL and therefore no rows (fails closed). `customers` is protected on `id`. Reference data (`products`, `policy_*`) is read-only to the app role and not customer-scoped.
-- The current customer is set with `SET LOCAL` (`set_config('app.current_customer_id', :id, true)`), **never `SET`**. Session-scoped state leaks across requests through a connection pool, which would be a cross-customer leak introduced by the very feature meant to prevent one. The transaction wraps the whole request, so the setting is transaction-scoped.
+Superusers and table owners bypass RLS, so the app role is neither. The application also **refuses to start** on a role that is a superuser, has BYPASSRLS, or owns a table in `public` (`assert_unprivileged_role`, run in the app lifespan and on lazy engine creation; tested for the superuser and the owner), because each of those makes RLS a silent no-op. Connection URLs: `DATABASE_URL` is the app role; `MIGRATION_DATABASE_URL` the owner (Alembic, policy ingestion); `ADMIN_DATABASE_URL` the bootstrap superuser (seeding, `python -m app.db.bootstrap`).
 
-### 17.3 Tests
-- Every RLS test connects as `support_app`. A test run as the compose superuser proves nothing.
-- One test deliberately connects as the superuser and asserts the policy is bypassed, so the suite documents the boundary instead of hiding it.
-- A pool test checks that a connection reused by a second request carries no customer setting from the first.
-- Missing-setting test: queries with no customer set return zero rows.
+### 17.2 Policies (exact, migration 0012)
+`FORCE ROW LEVEL SECURITY` is set on every protected table as well as `ENABLE`, so even the owner is subject to the policy. The current customer is `app_current_customer()` = `NULLIF(current_setting('app.current_customer_id', true), '')::uuid`; unset gives NULL and therefore **no rows** (fails closed). The NULLIF matters: after a transaction that used the setting, a pooled connection reports `''`, and `''::uuid` would raise instead of returning nothing. One policy per table, `FOR ALL`, `TO PUBLIC` (so a role added later is isolated by default):
 
-### 17.4 Deployment
-Role creation lives in a bootstrap script (`db/roles.sql`), referenced by `docs/DEPLOYMENT.md` so it does not evaporate at the OCI step. Passwords come from the environment, never the repository.
+```sql
+-- 17 tables with a customer_id column: actions, audit_log, auth_sessions, confirmation_tokens,
+-- conversations, decision_clauses, decisions, handoffs, messages, order_items, orders,
+-- refund_lines, refunds, shipment_events, shipments, subscriptions, turn_traces
+CREATE POLICY customer_isolation ON <t> FOR ALL
+    USING      (customer_id = (SELECT app_current_customer()))
+    WITH CHECK (customer_id = (SELECT app_current_customer()));
+-- customers is keyed on id
+CREATE POLICY customer_isolation ON customers FOR ALL
+    USING (id = (SELECT app_current_customer())) WITH CHECK (id = (SELECT app_current_customer()));
+-- decision_policies has no customer_id: visible exactly when its decision is
+CREATE POLICY customer_isolation ON decision_policies FOR ALL
+    USING      (EXISTS (SELECT 1 FROM decisions d WHERE d.id = decision_policies.decision_id))
+    WITH CHECK (EXISTS (SELECT 1 FROM decisions d WHERE d.id = decision_policies.decision_id));
+-- the session must be found before the customer is known: one extra read-only policy, by the
+-- session id the caller presented (setting app.session_id, cleared right after the lookup)
+CREATE POLICY session_lookup ON auth_sessions FOR SELECT
+    USING (id = (SELECT app_presented_session()));
+```
+**Protected (19 tables):** the 17 above, `customers`, `decision_policies`. **Deliberately not protected (8), each with its reason in the test that fails if a table is neither protected nor listed:** `alembic_version` (bookkeeping), `products`, `policy_documents`, `policy_chunks`, `policy_incorporations` (shared reference data, read-only to the app role), `llm_cache`, `llm_usage_daily`, `llm_calls` (global provider-layer tables with no customer id). Note on `llm_cache`: its stored response text can echo a customer's message; the app reads it only by exact hash key and no endpoint lists it, but it is the one unprotected table that can hold customer text (a candidate for protection, or for storing a redacted form).
+
+**The current customer is set with `SET LOCAL`, never `SET`.** In code: `set_config('app.current_customer_id', :id, true)` (SET LOCAL with a bound parameter) in `app/db/rls.py`, called only with the id of an authenticated session. One connection and one transaction wrap the whole request (`get_conn`: READ ONLY for a GET, read-write for the one POST; commit on success, rollback on any error); the dependencies and the route share it, so the setting covers all of it, and COMMIT or ROLLBACK discards it before the pooled connection is reused. The workflow also binds the customer at the start of `run_turn`. Two guards: after every `set_config` the value is read back in the NEXT statement, so an autocommit connection (where it would vanish silently) raises; and a static test fails on any `SET app.`, any `is_local=false`, or any `set_config` outside `rls.py`.
+
+**Gotchas found while building it (each would have been silent):** (1) views run with their OWNER's privileges and the owner is subject to FORCE RLS, so the refund drift views reported "no drift" even to a superuser; both are now `security_invoker`, so the audit sees everything and the app role sees its own customer. (2) `psycopg` rejects `format('%L')` in a script run with parameters; the bootstrap runs it on the raw connection. (3) FORCE applies to `support_owner` too: a data migration that must see every customer's rows cannot run as the owner; run it as the bootstrap superuser. (4) `audit_log.customer_id` is nullable: a row with no customer can be written only by a role that bypasses RLS (a system event with no customer is a future decision).
+
+### 17.3 Tests (`tests/db/test_rls.py`, a private throwaway database)
+- **Every isolation test connects as `support_app`.** One test deliberately connects as the superuser and asserts the policy is bypassed (it sees three or more customers with no setting; support_app sees none), so the suite documents the boundary instead of hiding it. The owner is shown to be subject to the policy through FORCE.
+- **Mutation test:** the repository's `customer_id = :c` filters are removed (a monkeypatch on the SQL text); a CONTROL on the superuser connection shows the mutated repository then hands alex blair's order, and as `support_app` scoped to alex the same mutated code returns nothing, while it still returns blair's own order to blair. That is the proof that RLS alone denies the read.
+- With no customer set every protected table returns no rows; an unfiltered query returns only the current customer's rows; an insert for another customer is refused (SQLSTATE 42501); the app role holds no write on business tables; `decision_policies` follows its decision.
+- **Pool test:** a pool of exactly one connection is reused (asserted) and the second request sees no customer; the setting is discarded on both commit and rollback; alex, blair, alex through the real dependency chain on that one connection.
+- **Catalog tests:** every table with a `customer_id` column is forced and has a policy; every other table is on the exempt list; the exact policy expressions are asserted.
+- **End to end with no dependency overrides:** real `get_conn`, `current_customer` and workflow as `support_app` (reads, a `/chat` turn that writes its record, session resolution under RLS, 401 cases, the startup refusal on a privileged role).
+- The rest of the suite runs on the bootstrap superuser (it seeds, and it tests things that are not RLS). The test database itself is created, handed to `support_owner` by `roles.sql` and migrated by `support_owner`, exactly as a deployment is.
+
+### 17.4 Grants (migration 0012) and what M2 adds
+`support_app` holds **SELECT** on the tables the workflow and the read API read (customer data, `products`, `policy_*`); **SELECT, INSERT** on the record of the conversation (`conversations`, `messages`, `decisions`, `decision_clauses`, `decision_policies`, `handoffs`, `turn_traces`, `audit_log`, `auth_sessions`) plus column-level UPDATE of `conversations(state, tool_calls_used)` and `auth_sessions(revoked_at)`; and for the provider layer `llm_cache` (SELECT, INSERT), `llm_usage_daily` (SELECT, INSERT, UPDATE) and `llm_calls` (INSERT), with USAGE on the two sequences. It holds **no write on any business table** (`orders`, `order_items`, `subscriptions`, `shipments`, `refunds`, `actions`, `confirmation_tokens`, and so on). The M2 write paths add their grants in their own migrations beside the code that needs them (the refund triggers update `orders` and `order_items`, which will need `UPDATE` on those; RLS still applies to it).
+
+### 17.5 Deployment and provisioning
+See `docs/DEPLOYMENT.md`. In short: the roles are created by `backend/app/db/roles.sql`, run by `python -m app.db.bootstrap` (any database, idempotent, passwords from the environment, no default) or, on a fresh compose volume, by `db/init/02-roles.sh`; migrations run as `support_owner` (compose `migrate` service); the app connects as `support_app`. Verified on a throwaway container (fresh-volume path) and by converting the existing development database.
+
+### 17.6 Out of scope here, noted
+A staff or handoff-queue view across customers will need its own role and policy (never a bypass for the app role). The 8 unprotected tables are listed above. The `session_lookup` policy exposes one row to someone who already holds that session id.
