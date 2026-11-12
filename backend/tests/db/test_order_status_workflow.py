@@ -20,6 +20,7 @@ from app.seed import ids
 from app.seed.loader import seed_all
 from app.workflow.order_status import ConversationNotFound, OrderStatusWorkflow
 from app.workflow.state_machine import State
+from tests.db.scoped import Scope, count_rows, fetch_rows
 from tests.providers.helpers import ScriptedAdapter, reply
 from tests.workflow.helpers import (
     FIXTURES,
@@ -721,16 +722,18 @@ def test_a_determination_cannot_be_turned_into_an_action_or_edited(
 def test_the_workflow_never_writes_business_state(
     world: Connection, embedder: OnnxBgeEmbedder
 ) -> None:
+    scope = Scope.customers(*(c.customer_id for c in CTX.values()))  # the seeded customers only
+
     def snapshot() -> list[Any]:
-        return (
+        return [
             [
                 tuple(r)
-                for r in q(world, "SELECT id, status, refunded_total_cents FROM orders ORDER BY id")
-            ]
-            + [tuple(r) for r in q(world, "SELECT id, status FROM subscriptions ORDER BY id")]
-            + [tuple(r) for r in q(world, "SELECT count(*) FROM refunds")]
-            + [tuple(r) for r in q(world, "SELECT count(*) FROM actions")]
-        )
+                for r in fetch_rows(world, "orders", scope, "id, status, refunded_total_cents")
+            ],
+            [tuple(r) for r in fetch_rows(world, "subscriptions", scope, "id, status")],
+            count_rows(world, "refunds", scope),
+            count_rows(world, "actions", scope),
+        ]
 
     before = snapshot()
     for scenario, who, number, *_ in CASES:
@@ -753,3 +756,41 @@ def test_the_conversation_is_driven_only_by_fakes_in_ci(
 
 def test_workflow_type_is_the_documented_class(embedder: OnnxBgeEmbedder) -> None:
     assert isinstance(build_workflow(InspectableFake(), embedder), OrderStatusWorkflow)
+
+
+def test_a_correct_looking_explanation_that_omits_the_decisive_clause_fails_closed_end_to_end(
+    world: Connection, embedder: OnnxBgeEmbedder
+) -> None:
+    """Presumed lost is decided by clause 2. An explanation citing only clause 1 (true, but not the
+    reason) is a wrong explanation made of true statements."""
+    omits = explanation_reply(
+        "presumed_lost", [C1], "It left our warehouse on 2026-03-11 and is somewhere in transit."
+    )
+    r = lost_turn(world, embedder, omits)
+    assert r.state is State.HANDED_OFF and r.handoff_reason == "EXPLANATION_MISMATCH"
+    assert any("decisive" in p for p in r.trace["explanation"]["problems"])
+    assert "somewhere in transit" not in r.reply  # the model's words are not shown
+    # omitting only the SUPPORTING clause is fine
+    ok = explanation_reply("presumed_lost", [C2], "Presumed lost since 2026-03-25.")
+    assert lost_turn(world, embedder, ok).state is State.ANSWERED
+
+
+def test_the_decisive_and_supporting_roles_are_persisted_and_reported(
+    world: Connection, embedder: OnnxBgeEmbedder
+) -> None:
+    r = build_workflow(InspectableFake(), embedder).run_turn(
+        world, CTX["blair"], "Where is my order SIM-2001?", scenario_id="os_presumed_lost"
+    )
+    roles = {
+        x.chunk_key: x.role
+        for x in q(
+            world,
+            "SELECT chunk_key, role FROM decision_clauses WHERE decision_id = :d",
+            d=r.decision_id,
+        )
+    }
+    assert roles == {C2: "decisive", C1: "supporting"}
+    assert r.determination is not None
+    assert r.determination["decisive_clause_keys"] == [C2] and r.determination[
+        "supporting_clause_keys"
+    ] == [C1]

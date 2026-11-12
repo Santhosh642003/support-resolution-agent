@@ -48,6 +48,14 @@ class Determination:
         return self.result.applied_clause_keys
 
     @property
+    def decisive_clause_keys(self) -> tuple[str, ...]:
+        return self.result.decisive_clause_keys
+
+    @property
+    def supporting_clause_keys(self) -> tuple[str, ...]:
+        return self.result.supporting_clause_keys
+
+    @property
     def decision_outcome(self) -> str:
         return self.result.decision_outcome
 
@@ -63,6 +71,8 @@ class Determination:
             "decision_outcome": self.decision_outcome,
             "reason_codes": list(self.reason_codes),
             "applied_clause_keys": list(self.applied_clause_keys),
+            "decisive_clause_keys": list(self.decisive_clause_keys),
+            "supporting_clause_keys": list(self.supporting_clause_keys),
             "policy_versions": {"shipping": self.result.policy_version},
             "rule_set_version": self.rule_set_version,
             "authorizes_action": self.authorizes_action,
@@ -132,10 +142,15 @@ def persist_determination(
     for key in det.applied_clause_keys:
         conn.execute(
             text(
-                "INSERT INTO decision_clauses (decision_id, customer_id, chunk_key)"
-                " VALUES (:d, :c, :k)"
+                "INSERT INTO decision_clauses (decision_id, customer_id, chunk_key, role)"
+                " VALUES (:d, :c, :k, :r)"
             ),
-            {"d": decision_id, "c": ctx.customer_id, "k": key},
+            {
+                "d": decision_id,
+                "c": ctx.customer_id,
+                "k": key,
+                "r": "decisive" if key in det.decisive_clause_keys else "supporting",
+            },
         )
     if det.applied_clause_keys:
         conn.execute(

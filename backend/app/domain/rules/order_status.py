@@ -12,6 +12,14 @@ Applied clauses (shipping policy, one version today):
             shipment is undelivered
   clause 3  a replacement shipment carries its own window from its own ship date: when the order is
             a replacement
+DECISIVE vs SUPPORTING. Every applied clause is one or the other (SPEC 10.5). A clause is
+decisive when it is what separates this outcome from its neighbour: had it been absent or
+different, THIS outcome would not have been reached for the reason given. Delivered / on schedule /
+late are decided by the delivery window (clause 1); presumed lost and a carrier exception are
+decided by the presumed-lost rule (clause 2). The others applied are supporting: they locate the
+dates or rule out a neighbouring outcome without being the reason (clause 2 for a late parcel,
+clause 1 for a lost one, clause 3 for a replacement). The explanation must cite every decisive
+clause.
 No clause is applied when there is nothing to measure (not shipped yet, digital, canceled).
 
 SAFE BY DEFAULT. The rule refuses to guess: a policy version it does not implement, or a product
@@ -22,7 +30,7 @@ category conflict is an OPEN ITEM carried to the rules task (M2), not resolved h
 The determination authorises no action: its decision outcome is 'informational'.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from enum import StrEnum
 
@@ -48,6 +56,11 @@ class OrderStatusOutcome(StrEnum):
     CANCELED = "canceled"
     DELIVERED_DIGITAL = "delivered_digital"
     NEEDS_HUMAN = "needs_human"
+
+
+_DECIDED_BY_PRESUMED_LOST_RULE = frozenset(
+    {OrderStatusOutcome.PRESUMED_LOST, OrderStatusOutcome.DELIVERY_EXCEPTION}
+)
 
 
 @dataclass(frozen=True)
@@ -76,10 +89,23 @@ class OrderStatusResult:
     applied_clauses: tuple[int, ...]  # clause numbers of the shipping policy
     policy_version: int
     facts: dict[str, str | int | bool | None] = field(default_factory=dict)
+    decisive_clauses: tuple[int, ...] = ()  # the subset that determined the outcome
 
     @property
     def decision_outcome(self) -> str:
         return "needs_human" if self.outcome is OrderStatusOutcome.NEEDS_HUMAN else "informational"
+
+    @property
+    def decisive_clause_keys(self) -> tuple[str, ...]:
+        return tuple(chunk_key("shipping", self.policy_version, n) for n in self.decisive_clauses)
+
+    @property
+    def supporting_clause_keys(self) -> tuple[str, ...]:
+        return tuple(
+            chunk_key("shipping", self.policy_version, n)
+            for n in self.applied_clauses
+            if n not in self.decisive_clauses
+        )
 
     @property
     def applied_clause_keys(self) -> tuple[str, ...]:
@@ -178,4 +204,5 @@ def determine_order_status(
     if inp.is_replacement:
         clauses.append(3)
         reasons.append(ReasonCode.REPLACEMENT_OWN_WINDOW)
-    return result(outcome, reasons, tuple(clauses), **facts)
+    decisive = (2,) if outcome in _DECIDED_BY_PRESUMED_LOST_RULE else (1,)
+    return replace(result(outcome, reasons, tuple(clauses), **facts), decisive_clauses=decisive)
