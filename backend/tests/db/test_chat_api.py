@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection, Engine
 
-from app.api.deps import get_conn, get_write_conn
+from app.api.deps import get_conn
 from app.auth.sessions import SESSION_COOKIE, create_session
 from app.clock import FixedClock
 from app.main import create_app
@@ -58,7 +58,6 @@ class Env:
             yield conn  # the test's own transaction: sees the seed, rolls back at the end
 
         app.dependency_overrides[get_conn] = same
-        app.dependency_overrides[get_write_conn] = same
         c = TestClient(app)
         if who:
             c.cookies.set(SESSION_COOKIE, str(self.sessions[who]))

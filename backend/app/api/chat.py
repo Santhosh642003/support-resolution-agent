@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Connection
 
-from app.api.deps import current_customer, get_workflow, get_write_conn, not_found
+from app.api.deps import current_customer, get_conn, get_workflow, not_found
 from app.auth.context import CustomerContext
 from app.workflow.order_status import ConversationNotFound, OrderStatusWorkflow
 
@@ -61,13 +61,13 @@ class ChatResponse(BaseModel):
     simulated: bool = True
 
 
-WriteConn = Annotated[Connection, Depends(get_write_conn)]
+Conn = Annotated[Connection, Depends(get_conn)]
 Customer = Annotated[CustomerContext, Depends(current_customer)]
 Workflow = Annotated[OrderStatusWorkflow, Depends(get_workflow)]
 
 
 @router.post("/chat", response_model=ChatResponse)
-def chat(body: ChatRequest, conn: WriteConn, ctx: Customer, workflow: Workflow) -> ChatResponse:
+def chat(body: ChatRequest, conn: Conn, ctx: Customer, workflow: Workflow) -> ChatResponse:
     try:
         r = workflow.run_turn(conn, ctx, body.message, conversation_id=body.conversation_id)
     except ConversationNotFound:

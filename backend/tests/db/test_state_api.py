@@ -9,6 +9,7 @@ import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date
+from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
 
@@ -255,7 +256,8 @@ def test_every_state_route_is_get_only_and_returns_a_named_typed_schema(world: W
 
 
 def test_the_request_connection_is_read_only_at_the_database(engine: Engine) -> None:
-    with contextmanager(get_conn)(engine) as c:
+    request = SimpleNamespace(method="GET")  # a GET: the read-only transaction
+    with contextmanager(get_conn)(request, engine) as c:  # type: ignore[arg-type]
         with pytest.raises(DBAPIError) as exc:
             c.execute(
                 text(

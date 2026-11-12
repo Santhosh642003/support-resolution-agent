@@ -1,11 +1,15 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from pydantic import BaseModel
-from sqlalchemy import Engine
+from sqlalchemy import Engine, create_engine
 
 from app.api.chat import router as chat_router
 from app.api.routes import router as state_router
 from app.clock import Clock, FixedClock, SystemClock
 from app.config import get_settings
+from app.db.rls import assert_unprivileged_role
 from app.workflow.order_status import OrderStatusWorkflow
 
 
@@ -27,7 +31,19 @@ def create_app(
     default the engine is created lazily from settings and the clock follows CLOCK_MODE:
     'simulated' (FixedClock at SIMULATED_TODAY, matching the seeded data) or 'system'."""
     settings = get_settings()
-    api = FastAPI(title="Support Resolution Agent (SIMULATED DATA)")
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        # Startup check (production path): a database role that bypasses row-level security makes
+        # it a silent no-op, so refuse to start rather than run unprotected (SPEC 17).
+        if app.state.engine is None:
+            probe_engine = create_engine(get_settings().database_url, pool_pre_ping=True)
+            with probe_engine.connect() as probe:
+                assert_unprivileged_role(probe)
+            app.state.engine = probe_engine
+        yield
+
+    api = FastAPI(title="Support Resolution Agent (SIMULATED DATA)", lifespan=lifespan)
     api.state.engine = engine
     api.state.clock = clock or (SystemClock() if settings.clock_mode == "system" else FixedClock())
 

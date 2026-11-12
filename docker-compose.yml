@@ -8,16 +8,34 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-support}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-support}
       POSTGRES_DB: ${POSTGRES_DB:-support}
+      # Dev defaults, like the superuser's above. Real deployments set both from a secrets store.
+      SUPPORT_OWNER_PASSWORD: ${SUPPORT_OWNER_PASSWORD:-support_owner}
+      SUPPORT_APP_PASSWORD: ${SUPPORT_APP_PASSWORD:-support_app}
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d:ro
+      - ./backend/app/db/roles.sql:/opt/roles.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # One-shot: runs the migrations as support_owner (the table owner), then exits. The backend waits
+  # for it. Nothing else in this stack connects as the owner or the superuser.
+  migrate:
+    build:
+      context: ./backend
+      additional_contexts:
+        policies: ./policies
+    command: ["/srv/.venv/bin/alembic", "upgrade", "head"]
+    environment:
+      MIGRATION_DATABASE_URL: postgresql+psycopg://support_owner:${SUPPORT_OWNER_PASSWORD:-support_owner}@db:5432/${POSTGRES_DB:-support}
+    depends_on:
+      db:
+        condition: service_healthy
 
   backend:
     build:
@@ -25,7 +43,9 @@ services:
       additional_contexts:
         policies: ./policies
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-support}:${POSTGRES_PASSWORD:-support}@db:5432/${POSTGRES_DB:-support}
+      # The application connects as support_app: not a superuser, owns nothing, subject to
+      # row-level security. It refuses to start on a role that would bypass it (SPEC 17).
+      DATABASE_URL: postgresql+psycopg://support_app:${SUPPORT_APP_PASSWORD:-support_app}@db:5432/${POSTGRES_DB:-support}
       LLM_PROVIDER: ${LLM_PROVIDER:-fake}
       LLM_MODEL: ${LLM_MODEL:-}
     ports:
@@ -33,6 +53,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
 volumes:
   pgdata:

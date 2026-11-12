@@ -16,6 +16,12 @@ from app.auth.context import CustomerContext
 from app.auth.sessions import SESSION_COOKIE, resolve_session
 from app.clock import Clock
 from app.config import get_settings
+from app.db.rls import (
+    assert_unprivileged_role,
+    clear_presented_session,
+    present_session,
+    set_current_customer,
+)
 from app.workflow.order_status import OrderStatusWorkflow
 
 
@@ -32,6 +38,8 @@ def get_engine(request: Request) -> Engine:
     engine: Engine | None = request.app.state.engine
     if engine is None:  # created lazily so importing the app never connects
         engine = create_engine(get_settings().database_url, pool_pre_ping=True)
+        with engine.connect() as probe:
+            assert_unprivileged_role(probe)  # refuse a role that would bypass RLS silently
         request.app.state.engine = engine
     return engine
 
@@ -39,14 +47,6 @@ def get_engine(request: Request) -> Engine:
 def get_clock(request: Request) -> Clock:
     clock: Clock = request.app.state.clock
     return clock
-
-
-def get_write_conn(engine: Annotated[Engine, Depends(get_engine)]) -> Iterator[Connection]:
-    """A read-WRITE transaction for the one endpoint that records a conversation (/chat). It
-    commits when the request succeeds and rolls back on an error. It writes the record of the
-    conversation only; no business state is reachable from the workflow."""
-    with engine.begin() as conn:
-        yield conn
 
 
 def get_workflow(
@@ -74,12 +74,26 @@ def get_workflow(
     return wf
 
 
-def get_conn(engine: Annotated[Engine, Depends(get_engine)]) -> Iterator[Connection]:
-    """One connection per request, in a READ ONLY transaction: these endpoints cannot write even
-    if a bug tried to (the database refuses, SQLSTATE 25006)."""
+def get_conn(
+    request: Request, engine: Annotated[Engine, Depends(get_engine)]
+) -> Iterator[Connection]:
+    """ONE connection and ONE transaction for the whole request (SPEC 17.2), shared by every
+    dependency and the route, so the customer bound to the transaction covers all of it.
+
+    A GET runs READ ONLY: those endpoints cannot write even if a bug tried (SQLSTATE 25006). The one
+    POST (/chat) writes the record of the conversation only. The transaction commits when the
+    request succeeds and rolls back on any error, and ending it discards the transaction-scoped
+    customer setting before the pooled connection is reused."""
     with engine.connect() as conn:
-        conn.execute(text("SET TRANSACTION READ ONLY"))
-        yield conn
+        if request.method in ("GET", "HEAD", "OPTIONS"):
+            conn.execute(text("SET TRANSACTION READ ONLY"))
+        try:
+            yield conn
+        except BaseException:
+            conn.rollback()
+            raise
+        else:
+            conn.commit()
 
 
 def current_customer(
@@ -92,7 +106,10 @@ def current_customer(
         session_id = UUID(session)
     except ValueError:
         raise unauthenticated() from None
+    present_session(conn, session_id)  # lets the lookup see exactly this session's row
     ctx = resolve_session(conn, session_id)
+    clear_presented_session(conn)
     if ctx is None:
         raise unauthenticated()
+    set_current_customer(conn, ctx.customer_id)  # the rest of the transaction is this customer's
     return ctx

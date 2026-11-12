@@ -7,7 +7,13 @@ from alembic import context
 from app.config import get_settings
 
 config = context.config
-url = config.get_main_option("sqlalchemy.url") or get_settings().database_url
+_settings = get_settings()
+# Migrations run as support_owner (MIGRATION_DATABASE_URL), never as the application role.
+url = (
+    config.get_main_option("sqlalchemy.url")
+    or _settings.migration_database_url
+    or _settings.database_url
+)
 
 if context.is_offline_mode():
     context.configure(url=url, literal_binds=True)

@@ -19,7 +19,14 @@ class Settings(BaseSettings):
     # seeded data keeps its meaning (SPEC 2.5); "system" uses the real clock. Token and session
     # expiry always use the database wall clock, whatever this is set to.
     clock_mode: Literal["simulated", "system"] = "simulated"
-    database_url: str = "postgresql+psycopg://support:support@127.0.0.1:5432/support"
+    # The APPLICATION connects as `support_app` (no superuser, no ownership, subject to row-level
+    # security; SPEC 17). Migrations run as `support_owner` (MIGRATION_DATABASE_URL) and seeding and
+    # role bootstrap as the bootstrap superuser (ADMIN_DATABASE_URL). Unset, each falls back to
+    # DATABASE_URL, which is only correct for a single-role legacy setup; the app refuses to start
+    # on a privileged role (app/db/roles.py).
+    database_url: str = "postgresql+psycopg://support_app:support_app@127.0.0.1:5432/support"
+    migration_database_url: str | None = None
+    admin_database_url: str | None = None
 
     # Provider/model are selected by env only. Default is the offline fake.
     llm_provider: Literal["fake", "groq", "gemini"] = "fake"

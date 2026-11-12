@@ -204,7 +204,12 @@ def _ingest_incorporations(conn: Connection, docs: Sequence[PolicyDocument]) -> 
 def main(argv: list[str]) -> None:
     policies_dir = Path(argv[0]) if argv else DEFAULT_POLICIES_DIR
     docs = load_policies(policies_dir)
-    engine = create_engine(get_settings().database_url)
+    settings = get_settings()
+    # Policy tables are not customer-scoped and the application role only reads them, so the corpus
+    # is ingested as the owner (SPEC 17).
+    engine = create_engine(
+        settings.migration_database_url or settings.admin_database_url or settings.database_url
+    )
     with engine.begin() as conn:
         report = ingest_policies(conn, OnnxBgeEmbedder(), docs)
     print(report)

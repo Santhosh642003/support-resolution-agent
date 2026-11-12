@@ -31,6 +31,7 @@ from sqlalchemy import Connection, text
 
 from app.auth.context import CustomerContext
 from app.clock import Clock
+from app.db.rls import set_current_customer
 from app.domain.reason_codes import ReasonCode
 from app.domain.rules.order_status import (
     OrderStatusInput,
@@ -161,6 +162,7 @@ class OrderStatusWorkflow:
         conversation_id: UUID | None = None,
         scenario_id: str | None = None,
     ) -> TurnResult:
+        set_current_customer(conn, ctx.customer_id)  # bind the identity to this transaction too
         started = self._perf()
         now = self._clock.now()
         today = self._clock.today()

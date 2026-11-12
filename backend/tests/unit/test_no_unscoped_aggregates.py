@@ -23,6 +23,14 @@ ALLOWED = {
 }
 
 
+# Files exempt from the check, with the reason. test_rls.py deliberately writes UNFILTERED queries:
+# the point is that the database's row-level security is the only scope, and it runs in its own
+# throwaway database (make_database), so no other test's rows can pollute it.
+EXEMPT_FILES = {
+    "test_rls.py": "tests unfiltered queries on purpose, in a private database (SPEC 17)"
+}
+
+
 def _sql_strings(tree: ast.AST) -> list[tuple[int, str]]:
     """Every string a test hands to the database, with f-strings re-joined so a WHERE that sits in
     a later fragment of the same statement is seen."""
@@ -55,7 +63,7 @@ def unscoped_aggregates(source: str) -> list[tuple[int, str]]:
 def test_no_test_writes_an_unscoped_aggregate_over_a_shared_table() -> None:
     offenders = {}
     for path in TESTS.rglob("*.py"):
-        if path.name in {"scoped.py", Path(__file__).name}:
+        if path.name in {"scoped.py", Path(__file__).name, *EXEMPT_FILES}:
             continue
         bad = unscoped_aggregates(path.read_text(encoding="utf-8"))
         if bad:
