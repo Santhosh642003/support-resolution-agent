@@ -7,9 +7,11 @@ window anchor (delivery / presumed-lost date) is a different date and never goes
 distinct types make mixing them a mypy error.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy import Connection, Row, text
 
@@ -97,3 +99,32 @@ def search_clauses_fts(
         },
     )
     return [_to_clause(r) for r in rows]
+
+
+def clauses_by_key(conn: Connection, keys: Sequence[str]) -> list[PolicyClause]:
+    """The clauses with exactly these keys, in the order given. Used to show the text of the
+    clauses a Decision APPLIED: chosen by key (what the rules cited), never by ranking."""
+    if not keys:
+        return []
+    rows = conn.execute(
+        text(
+            f"SELECT {_COLUMNS} FROM policy_chunks WHERE chunk_key = ANY(CAST(:k AS text[]))"  # noqa: S608
+        ),
+        {"k": list(keys)},
+    )
+    by_key = {r.chunk_key: _to_clause(r) for r in rows}
+    return [by_key[k] for k in keys if k in by_key]
+
+
+def policy_version_in_effect(
+    conn: Connection, policy_type: str, purchase_date: PurchaseDate
+) -> tuple[int, UUID] | None:
+    """(version, document id) of the policy in effect on the PURCHASE date, or None."""
+    row = conn.execute(
+        text(
+            "SELECT version, id FROM policy_documents"
+            " WHERE policy_type = :t AND validity @> CAST(:d AS date)"
+        ),
+        {"t": policy_type, "d": purchase_date},
+    ).one_or_none()
+    return None if row is None else (int(row.version), row.id)

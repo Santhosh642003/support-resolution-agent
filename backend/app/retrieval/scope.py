@@ -78,6 +78,29 @@ def _on(ts: datetime | None) -> date | None:
     return None if ts is None else ts.astimezone(UTC).date()
 
 
+def scope_facts_from_state(
+    categories: frozenset[str],
+    order_status: str,
+    carrier_status: str | None,
+    shipped_on: date | None,
+    delivered_on: date | None,
+    has_shipment: bool,
+    today: date,
+) -> ScopeFacts:
+    """The scope facts from already-fetched order state (pure). `delivery_issue` agrees exactly
+    with the order-status determination: undelivered AND (past the expected date, presumed lost,
+    or a carrier exception/loss). 'Due today' is NOT a delivery issue."""
+    delivered = delivered_on is not None
+    issue = False
+    if has_shipment and not delivered:
+        late = shipped_on is not None and today > expected_delivery_date(shipped_on)
+        lost = shipped_on is not None and today >= presumed_lost_date(shipped_on)
+        issue = carrier_status in ("exception", "lost") or late or lost
+    elif not has_shipment and order_status == "delivered":
+        delivered = True  # a digital order with no shipment is delivered on purchase
+    return ScopeFacts("order", categories, delivered, issue)
+
+
 def facts_for_order(
     conn: Connection, ctx: CustomerContext, order_number: str, clock: Clock
 ) -> ScopeFacts | None:
@@ -88,17 +111,15 @@ def facts_for_order(
         return None
     categories = repo.categories_of_order(conn, ctx, order.id)
     ship = repo.shipment_of(conn, ctx, order.id)
-    delivered = ship is not None and ship.delivered_at is not None
-    issue = False
-    if ship is not None and not delivered:
-        shipped_on = _on(ship.shipped_at)
-        today = clock.today()
-        late = shipped_on is not None and today >= expected_delivery_date(shipped_on)
-        lost = shipped_on is not None and today >= presumed_lost_date(shipped_on)
-        issue = ship.status in ("exception", "lost") or late or lost
-    elif ship is None and order.status == "delivered":
-        delivered = True  # a digital order with no shipment is delivered on purchase
-    return ScopeFacts("order", frozenset(categories), delivered, issue)
+    return scope_facts_from_state(
+        frozenset(categories),
+        order.status,
+        None if ship is None else ship.status,
+        None if ship is None else _on(ship.shipped_at),
+        None if ship is None else _on(ship.delivered_at),
+        ship is not None,
+        clock.today(),
+    )
 
 
 def facts_for_subscription(

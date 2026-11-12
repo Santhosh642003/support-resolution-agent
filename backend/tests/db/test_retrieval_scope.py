@@ -13,6 +13,7 @@ from sqlalchemy import Connection
 
 from app.auth.context import CustomerContext
 from app.clock import FixedClock
+from app.config import Settings
 from app.domain.types import PurchaseDate
 from app.retrieval import scope as scope_module
 from app.retrieval.embedder import OnnxBgeEmbedder
@@ -78,9 +79,10 @@ def test_a_late_delivery_becomes_a_delivery_issue_only_as_the_injected_clock_adv
 ) -> None:
     base = FixedClock()
     assert not facts_for_order(world, BLAIR, "SIM-2003", base).delivery_issue  # type: ignore[union-attr]
-    # shipped 2026-04-13; the policy expects delivery 7 business days later, 2026-04-22
-    assert not facts_for_order(world, BLAIR, "SIM-2003", base.plus_days(6)).delivery_issue  # type: ignore[union-attr]
-    assert facts_for_order(world, BLAIR, "SIM-2003", base.plus_days(7)).delivery_issue  # type: ignore[union-attr]
+    # shipped 2026-04-13; the policy expects delivery 7 business days later, 2026-04-22. Due today is
+    # NOT a delivery issue (it agrees with the order-status determination); the day after is.
+    assert not facts_for_order(world, BLAIR, "SIM-2003", base.plus_days(7)).delivery_issue  # type: ignore[union-attr]
+    assert facts_for_order(world, BLAIR, "SIM-2003", base.plus_days(8)).delivery_issue  # type: ignore[union-attr]
 
 
 def test_another_customers_order_and_a_missing_order_give_the_same_no_facts(
@@ -232,3 +234,34 @@ def test_a_missing_clause_is_attributed_to_scoping_the_date_a_filter_or_ranking(
         attribute_missing(world, "faq_archive-v1-clause-1", V2_DAY, wide_rec, res, filters).kind
         == "excluded_by_metadata_filter"
     )
+
+
+def test_a_general_gift_card_question_reaches_the_gift_card_policy(
+    world: Connection, embedder: OnnxBgeEmbedder
+) -> None:
+    """PM check (2026-11-13): a gift card question with NO order context is a general question,
+    which is not order-scoped, so the gift card policy must be in scope and be retrieved. (The
+    same question about an order with no gift card is deliberately scoped out; see the negative
+    control in docs/retrieval/recall_v2.json.)"""
+    rec = decide_scope(["policy_question"], NO_ORDER_CONTEXT)
+    assert (
+        "gift_cards" in rec.types
+        and rec.included["gift_cards"] == "no order context (general question)"
+    )
+    cfg = HybridConfig.from_settings(Settings(_env_file=None))  # type: ignore[call-arg]  # production config
+    for day, version in ((PurchaseDate(date(2026, 2, 15)), 1), (V2_DAY, 2)):
+        res = retrieve(
+            world,
+            embedder,
+            "Can I get a refund on a gift card I bought?",
+            day,
+            rec.types,
+            cfg,
+            scope=rec,
+        )
+        keys = {r.clause.chunk_key for r in res.clauses}
+        assert {f"gift_cards-v{version}-clause-1", f"gift_cards-v{version}-clause-2"} & keys, (
+            day,
+            keys,
+        )
+        assert res.trace.scope is rec
