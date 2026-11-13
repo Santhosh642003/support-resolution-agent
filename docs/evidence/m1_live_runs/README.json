@@ -1,0 +1,85 @@
+{
+  "simulated": true,
+  "label": "SIMULATED BUSINESS: synthetic data from the first live (Groq) runs of the order-status workflow, M1.",
+  "exported_on": "2026-11-12",
+  "alembic_revision": "0012",
+  "corpus_state": {
+    "description": "policy corpus as ingested BEFORE the 2026-11-12 amendments (SPEC 18.6): 12 documents, 85 clauses; the clause keys and text in these rows refer to that corpus, not to the current policies/ directory",
+    "policy_chunks": 85,
+    "documents": [
+      {
+        "policy_type": "cancellation",
+        "version": 1,
+        "content_hash": "4c2d2a121cf5f2e81e7b2e9f80b46393142f1f16c459a6e349ec77cdbfe791f3",
+        "source_path": "policies/cancellation/v1.md"
+      },
+      {
+        "policy_type": "cancellation",
+        "version": 2,
+        "content_hash": "ec0c85a0fff6f5b43736c84fac67cb1f3c1651f6872c4bb4ee532d650cc4f288",
+        "source_path": "policies/cancellation/v2.md"
+      },
+      {
+        "policy_type": "faq_archive",
+        "version": 1,
+        "content_hash": "182dd5f3ff8db6166839e9acdff149f6a15192cc8dea72361bd6451b02bfc95f",
+        "source_path": "policies/faq_archive/v1.md"
+      },
+      {
+        "policy_type": "gift_cards",
+        "version": 1,
+        "content_hash": "d5e02b424af968cec004e4c85d83467d34c2cf132d887ed3118acb89257ec14f",
+        "source_path": "policies/gift_cards/v1.md"
+      },
+      {
+        "policy_type": "gift_cards",
+        "version": 2,
+        "content_hash": "b28fe86918543da881bac9150a0d2482987026b606cf12a560fbfda7edab254a",
+        "source_path": "policies/gift_cards/v2.md"
+      },
+      {
+        "policy_type": "merchant_returns",
+        "version": 1,
+        "content_hash": "ac4ff53969b129f4b45117a0ff34e3201e16d27fc784c468b1259702657c6962",
+        "source_path": "policies/merchant_returns/v1.md"
+      },
+      {
+        "policy_type": "refund",
+        "version": 1,
+        "content_hash": "0e95c7d5793e11a51f301982eec33b438db52b83c5d4be6af6f944237df5dffe",
+        "source_path": "policies/refund/v1.md"
+      },
+      {
+        "policy_type": "refund",
+        "version": 2,
+        "content_hash": "5ffb09a2c9ed1f535ba5c430d0ea29d0beb1e9f3ab346094b08a9c7f9e6f1d3f",
+        "source_path": "policies/refund/v2.md"
+      },
+      {
+        "policy_type": "shipping",
+        "version": 1,
+        "content_hash": "abd96e3ba26847e095f88080dd513b7aa8d63a8523a1817de01d08446c8cf3d9",
+        "source_path": "policies/shipping/v1.md"
+      },
+      {
+        "policy_type": "shipping_restrictions",
+        "version": 1,
+        "content_hash": "8af31d31de4086c836d74d3644a1636730e32c2a9a6acd2a8a38e6d96f4697eb",
+        "source_path": "policies/shipping_restrictions/v1.md"
+      },
+      {
+        "policy_type": "warranty",
+        "version": 1,
+        "content_hash": "ec7414f844690aa3b6af49c5a6584b0215103d91f7994981828b2ae85663110d",
+        "source_path": "policies/warranty/v1.md"
+      },
+      {
+        "policy_type": "warranty",
+        "version": 2,
+        "content_hash": "546f854165aa2be35f11b2145761993fdae888025be1edb252a80e68c4e4825c",
+        "source_path": "policies/warranty/v2.md"
+      }
+    ]
+  },
+  "note": "Exported before the development database was reset. Rows are verbatim; timestamps and uuids as stored."
+}

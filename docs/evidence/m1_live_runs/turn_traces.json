@@ -1,0 +1,2524 @@
+{
+  "simulated": true,
+  "table": "turn_traces",
+  "exported_on": "2026-11-12",
+  "alembic_revision": "0012",
+  "rows": [
+    {
+      "id": "498eb3a5-646e-4c8e-9104-93cdb5273393",
+      "conversation_id": "98b671cd-78bc-414d-aa01-0845cb7235cc",
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "turn_no": 1,
+      "final_state": "ANSWERED",
+      "tool_calls": 7,
+      "model_calls": 2,
+      "trace": {
+        "as_of": "2026-04-15",
+        "scope": {
+          "types": [
+            "shipping"
+          ],
+          "excluded": {
+            "shipping_restrictions": "no restricted-category item with a delivery problem on this order"
+          },
+          "included": {
+            "shipping": "core policy for intent ['order_status']"
+          }
+        },
+        "tools": [
+          {
+            "ms": 3.07,
+            "ok": true,
+            "tool": "get_order"
+          },
+          {
+            "ms": 7.98,
+            "ok": true,
+            "tool": "fetch_shipment"
+          },
+          {
+            "ms": 1.84,
+            "ok": true,
+            "tool": "fetch_events"
+          },
+          {
+            "ms": 1.58,
+            "ok": true,
+            "tool": "fetch_categories"
+          },
+          {
+            "ms": 1.97,
+            "ok": true,
+            "tool": "policy_version"
+          },
+          {
+            "ms": 27.75,
+            "ok": true,
+            "tool": "retrieve_policy"
+          },
+          {
+            "ms": 1.71,
+            "ok": true,
+            "tool": "fetch_clauses"
+          }
+        ],
+        "claims": [
+          "replacement order SIM-2002 hasn't arrived"
+        ],
+        "tokens": {
+          "prompt": 1533,
+          "completion": 894
+        },
+        "degraded": false,
+        "model_ms": 2507.9,
+        "total_ms": 3326.0,
+        "trace_id": "6a78ee0c3c0a4a09aea068d8356560e6",
+        "retrieval": {
+          "fts": [
+            "shipping-v1-clause-3"
+          ],
+          "vec": [
+            "shipping-v1-clause-3",
+            "shipping-v1-clause-2",
+            "shipping-v1-clause-1"
+          ],
+          "clauses": [
+            {
+              "key": "shipping-v1-clause-3",
+              "score": 0.032787,
+              "fts_rank": 1,
+              "vec_rank": 1
+            },
+            {
+              "key": "shipping-v1-clause-2",
+              "score": 0.016129,
+              "fts_rank": null,
+              "vec_rank": 2
+            },
+            {
+              "key": "shipping-v1-clause-1",
+              "score": 0.015873,
+              "fts_rank": null,
+              "vec_rank": 3
+            }
+          ],
+          "eligible": 3,
+          "incorporated": []
+        },
+        "extraction": {
+          "llm": {
+            "cache": "miss",
+            "model_ms": 538.7,
+            "total_ms": 695.4,
+            "llm_trace_id": "343a3affe70841bd9eeb2e0b1cbd8af5",
+            "adapter_calls": 1,
+            "prompt_tokens": 599,
+            "native_fallbacks": 0,
+            "completion_tokens": 71,
+            "transport_attempts": 1
+          },
+          "intent": "order_status",
+          "attempts": 1,
+          "confidence": 1.0,
+          "order_number": "SIM-2002"
+        },
+        "resolution": {
+          "matched": "SIM-2002",
+          "candidates": [
+            "SIM-2002"
+          ]
+        },
+        "tool_calls": 7,
+        "explanation": {
+          "llm": {
+            "cache": "miss",
+            "model_ms": 1969.2,
+            "total_ms": 2263.5,
+            "llm_trace_id": "9bcb29bee0a6403f89790e7071d8f74f",
+            "adapter_calls": 1,
+            "prompt_tokens": 934,
+            "native_fallbacks": 0,
+            "completion_tokens": 823,
+            "transport_attempts": 1
+          },
+          "accepted": true,
+          "attempts": 1,
+          "problems": [],
+          "model_cited": [
+            "shipping-v1-clause-1",
+            "shipping-v1-clause-2",
+            "shipping-v1-clause-3"
+          ],
+          "model_outcome": "in_transit_on_schedule"
+        },
+        "final_state": "ANSWERED",
+        "model_calls": 2,
+        "scenario_id": null,
+        "transitions": [
+          {
+            "to": "AUTHENTICATED",
+            "from": "NEW",
+            "reason": "valid session"
+          },
+          {
+            "to": "INTENT_CLASSIFIED",
+            "from": "AUTHENTICATED",
+            "reason": "intent=order_status"
+          },
+          {
+            "to": "DATA_FETCHED",
+            "from": "INTENT_CLASSIFIED",
+            "reason": "order SIM-2002"
+          },
+          {
+            "to": "POLICY_RETRIEVED",
+            "from": "DATA_FETCHED",
+            "reason": "scoped retrieval complete"
+          },
+          {
+            "to": "DECIDED",
+            "from": "POLICY_RETRIEVED",
+            "reason": "in_transit_on_schedule: WITHIN_DELIVERY_WINDOW,REPLACEMENT_OWN_WINDOW"
+          },
+          {
+            "to": "ANSWERED",
+            "from": "DECIDED",
+            "reason": "explanation verified"
+          }
+        ],
+        "prompt_guard": {
+          "error": null,
+          "model": "meta-llama/llama-prompt-guard-2-86m",
+          "score": 0.0003818999684881419,
+          "flagged": false,
+          "available": true,
+          "latency_ms": 223.3734000037657
+        },
+        "reply_source": "model",
+        "answer_reason": null,
+        "determination": {
+          "kind": "order_status",
+          "facts": {
+            "as_of": "2026-04-15",
+            "shipped_on": "2026-04-06",
+            "expected_on": "2026-04-15",
+            "delivered_on": null,
+            "order_number": "SIM-2002",
+            "carrier_status": "in_transit",
+            "is_replacement": true,
+            "policy_version": 1,
+            "presumed_lost_on": "2026-04-20",
+            "days_past_expected": 0,
+            "days_until_presumed_lost": 5
+          },
+          "outcome": "in_transit_on_schedule",
+          "decision_id": "1ff9ead5-737a-4394-b202-2a2db3ab9c19",
+          "input_state": {
+            "shipment": {
+              "status": "in_transit",
+              "shipped_on": "2026-04-06",
+              "delivered_on": null,
+              "carrier_expected_on": "2026-04-15",
+              "has_delivery_exception": false
+            },
+            "categories": [
+              "general"
+            ],
+            "order_number": "SIM-2002",
+            "order_status": "shipped",
+            "purchase_date": "2026-04-03",
+            "is_replacement": true
+          },
+          "order_number": "SIM-2002",
+          "reason_codes": [
+            "WITHIN_DELIVERY_WINDOW",
+            "REPLACEMENT_OWN_WINDOW"
+          ],
+          "policy_versions": {
+            "shipping": 1
+          },
+          "decision_outcome": "informational",
+          "rule_set_version": "order-status-1",
+          "authorizes_action": false,
+          "applied_clause_keys": [
+            "shipping-v1-clause-1",
+            "shipping-v1-clause-2",
+            "shipping-v1-clause-3"
+          ],
+          "decisive_clause_keys": [
+            "shipping-v1-clause-1"
+          ],
+          "supporting_clause_keys": [
+            "shipping-v1-clause-2",
+            "shipping-v1-clause-3"
+          ]
+        },
+        "handoff_reason": null,
+        "native_fallbacks": 0,
+        "review_requested": false
+      },
+      "created_at": "2026-11-12 00:44:19.294626+00:00"
+    },
+    {
+      "id": "75f22cc9-3e8a-4c68-b6f0-c31e84e32287",
+      "conversation_id": "d14a8454-3054-418d-b775-1da8dd68f410",
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "turn_no": 1,
+      "final_state": "ANSWERED",
+      "tool_calls": 7,
+      "model_calls": 2,
+      "trace": {
+        "as_of": "2026-04-15",
+        "scope": {
+          "types": [
+            "shipping"
+          ],
+          "excluded": {
+            "shipping_restrictions": "no restricted-category item with a delivery problem on this order"
+          },
+          "included": {
+            "shipping": "core policy for intent ['order_status']"
+          }
+        },
+        "tools": [
+          {
+            "ms": 1.97,
+            "ok": true,
+            "tool": "get_order"
+          },
+          {
+            "ms": 1.36,
+            "ok": true,
+            "tool": "fetch_shipment"
+          },
+          {
+            "ms": 1.37,
+            "ok": true,
+            "tool": "fetch_events"
+          },
+          {
+            "ms": 1.55,
+            "ok": true,
+            "tool": "fetch_categories"
+          },
+          {
+            "ms": 2.38,
+            "ok": true,
+            "tool": "policy_version"
+          },
+          {
+            "ms": 29.13,
+            "ok": true,
+            "tool": "retrieve_policy"
+          },
+          {
+            "ms": 1.64,
+            "ok": true,
+            "tool": "fetch_clauses"
+          }
+        ],
+        "claims": [
+          "My replacement order SIM-2002 hasn't arrived."
+        ],
+        "tokens": {
+          "prompt": 1105,
+          "completion": 371
+        },
+        "degraded": false,
+        "model_ms": 1174.3,
+        "total_ms": 1451.3,
+        "trace_id": "64ecb135f40d4394bf7e02028b26647d",
+        "retrieval": {
+          "fts": [
+            "shipping-v1-clause-3"
+          ],
+          "vec": [
+            "shipping-v1-clause-3",
+            "shipping-v1-clause-2",
+            "shipping-v1-clause-1"
+          ],
+          "clauses": [
+            {
+              "key": "shipping-v1-clause-3",
+              "score": 0.032787,
+              "fts_rank": 1,
+              "vec_rank": 1
+            },
+            {
+              "key": "shipping-v1-clause-2",
+              "score": 0.016129,
+              "fts_rank": null,
+              "vec_rank": 2
+            },
+            {
+              "key": "shipping-v1-clause-1",
+              "score": 0.015873,
+              "fts_rank": null,
+              "vec_rank": 3
+            }
+          ],
+          "eligible": 3,
+          "incorporated": []
+        },
+        "extraction": {
+          "llm": {
+            "cache": "miss",
+            "model_ms": 431.2,
+            "total_ms": 457.6,
+            "llm_trace_id": "1280d08ee6d74e4dbd9d88428ad3cdda",
+            "adapter_calls": 1,
+            "prompt_tokens": 357,
+            "native_fallbacks": 0,
+            "completion_tokens": 103,
+            "transport_attempts": 1
+          },
+          "intent": "order_status",
+          "attempts": 1,
+          "confidence": 1.0,
+          "order_number": "SIM-2002"
+        },
+        "resolution": {
+          "matched": "SIM-2002",
+          "candidates": [
+            "SIM-2002"
+          ]
+        },
+        "tool_calls": 7,
+        "explanation": {
+          "llm": {
+            "cache": "miss",
+            "model_ms": 743.1,
+            "total_ms": 769.5,
+            "llm_trace_id": "10854f60323043ff8104d3a168e993e7",
+            "adapter_calls": 1,
+            "prompt_tokens": 748,
+            "native_fallbacks": 0,
+            "completion_tokens": 268,
+            "transport_attempts": 1
+          },
+          "accepted": true,
+          "attempts": 1,
+          "problems": [],
+          "model_cited": [
+            "shipping-v1-clause-1"
+          ],
+          "model_outcome": "in_transit_on_schedule",
+          "commitment_phrases": []
+        },
+        "final_state": "ANSWERED",
+        "model_calls": 2,
+        "scenario_id": null,
+        "transitions": [
+          {
+            "to": "AUTHENTICATED",
+            "from": "NEW",
+            "reason": "valid session"
+          },
+          {
+            "to": "INTENT_CLASSIFIED",
+            "from": "AUTHENTICATED",
+            "reason": "intent=order_status"
+          },
+          {
+            "to": "DATA_FETCHED",
+            "from": "INTENT_CLASSIFIED",
+            "reason": "order SIM-2002"
+          },
+          {
+            "to": "POLICY_RETRIEVED",
+            "from": "DATA_FETCHED",
+            "reason": "scoped retrieval complete"
+          },
+          {
+            "to": "DECIDED",
+            "from": "POLICY_RETRIEVED",
+            "reason": "in_transit_on_schedule: WITHIN_DELIVERY_WINDOW,REPLACEMENT_OWN_WINDOW"
+          },
+          {
+            "to": "ANSWERED",
+            "from": "DECIDED",
+            "reason": "explanation verified"
+          }
+        ],
+        "prompt_guard": {
+          "error": null,
+          "model": "meta-llama/llama-prompt-guard-2-86m",
+          "score": 0.0003818999684881419,
+          "flagged": false,
+          "available": true,
+          "latency_ms": 153.41910000279313
+        },
+        "reply_source": "model",
+        "answer_reason": null,
+        "determination": {
+          "kind": "order_status",
+          "facts": {
+            "as_of": "2026-04-15",
+            "shipped_on": "2026-04-06",
+            "expected_on": "2026-04-15",
+            "delivered_on": null,
+            "order_number": "SIM-2002",
+            "carrier_status": "in_transit",
+            "is_replacement": true,
+            "policy_version": 1,
+            "presumed_lost_on": "2026-04-20",
+            "days_past_expected": 0,
+            "days_until_presumed_lost": 5
+          },
+          "outcome": "in_transit_on_schedule",
+          "decision_id": "98f21be3-87d5-4ff1-8feb-5fcffd095dcd",
+          "input_state": {
+            "shipment": {
+              "status": "in_transit",
+              "shipped_on": "2026-04-06",
+              "delivered_on": null,
+              "carrier_expected_on": "2026-04-15",
+              "has_delivery_exception": false
+            },
+            "categories": [
+              "general"
+            ],
+            "order_number": "SIM-2002",
+            "order_status": "shipped",
+            "purchase_date": "2026-04-03",
+            "is_replacement": true
+          },
+          "order_number": "SIM-2002",
+          "reason_codes": [
+            "WITHIN_DELIVERY_WINDOW",
+            "REPLACEMENT_OWN_WINDOW"
+          ],
+          "policy_versions": {
+            "shipping": 1
+          },
+          "decision_outcome": "informational",
+          "rule_set_version": "order-status-1",
+          "authorizes_action": false,
+          "applied_clause_keys": [
+            "shipping-v1-clause-1",
+            "shipping-v1-clause-2",
+            "shipping-v1-clause-3"
+          ],
+          "decisive_clause_keys": [
+            "shipping-v1-clause-1"
+          ],
+          "supporting_clause_keys": [
+            "shipping-v1-clause-2",
+            "shipping-v1-clause-3"
+          ]
+        },
+        "handoff_reason": null,
+        "native_fallbacks": 0,
+        "review_requested": false
+      },
+      "created_at": "2026-11-12 01:04:02.568033+00:00"
+    },
+    {
+      "id": "80c87979-8ba4-4e7a-884e-2056d141d858",
+      "conversation_id": "be7515aa-d70c-47a0-bf12-cc6f38c0a54f",
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "turn_no": 1,
+      "final_state": "ANSWERED",
+      "tool_calls": 7,
+      "model_calls": 2,
+      "trace": {
+        "as_of": "2026-04-15",
+        "scope": {
+          "types": [
+            "shipping"
+          ],
+          "excluded": {
+            "shipping_restrictions": "no restricted-category item with a delivery problem on this order"
+          },
+          "included": {
+            "shipping": "core policy for intent ['order_status']"
+          }
+        },
+        "tools": [
+          {
+            "ms": 2.97,
+            "ok": true,
+            "tool": "get_order"
+          },
+          {
+            "ms": 9.87,
+            "ok": true,
+            "tool": "fetch_shipment"
+          },
+          {
+            "ms": 2.34,
+            "ok": true,
+            "tool": "fetch_events"
+          },
+          {
+            "ms": 2.45,
+            "ok": true,
+            "tool": "fetch_categories"
+          },
+          {
+            "ms": 2.65,
+            "ok": true,
+            "tool": "policy_version"
+          },
+          {
+            "ms": 32.1,
+            "ok": true,
+            "tool": "retrieve_policy"
+          },
+          {
+            "ms": 1.96,
+            "ok": true,
+            "tool": "fetch_clauses"
+          }
+        ],
+        "claims": [
+          "Where is my order SIM-2001?"
+        ],
+        "tokens": {
+          "prompt": 1355,
+          "completion": 392
+        },
+        "degraded": false,
+        "model_ms": 2713.9,
+        "total_ms": 3050.2,
+        "trace_id": "48f1464d43454f959998c77372a52601",
+        "retrieval": {
+          "fts": [],
+          "vec": [
+            "shipping-v1-clause-1",
+            "shipping-v1-clause-3",
+            "shipping-v1-clause-2"
+          ],
+          "clauses": [
+            {
+              "key": "shipping-v1-clause-1",
+              "score": 0.016393,
+              "fts_rank": null,
+              "vec_rank": 1
+            },
+            {
+              "key": "shipping-v1-clause-3",
+              "score": 0.016129,
+              "fts_rank": null,
+              "vec_rank": 2
+            },
+            {
+              "key": "shipping-v1-clause-2",
+              "score": 0.015873,
+              "fts_rank": null,
+              "vec_rank": 3
+            }
+          ],
+          "eligible": 3,
+          "incorporated": []
+        },
+        "extraction": {
+          "llm": {
+            "cache": "off",
+            "model_ms": 1641.2,
+            "total_ms": 1669.1,
+            "llm_trace_id": "ce7f3ecbaa46414bbd0ced4ff444d164",
+            "adapter_calls": 1,
+            "prompt_tokens": 480,
+            "native_fallbacks": 0,
+            "completion_tokens": 115,
+            "transport_attempts": 1
+          },
+          "intent": "order_status",
+          "attempts": 1,
+          "confidence": 1.0,
+          "order_number": "SIM-2001"
+        },
+        "resolution": {
+          "matched": "SIM-2001",
+          "candidates": [
+            "SIM-2001"
+          ]
+        },
+        "tool_calls": 7,
+        "explanation": {
+          "llm": {
+            "cache": "off",
+            "model_ms": 1072.7,
+            "total_ms": 1088.7,
+            "llm_trace_id": "8cc49b0d86454ebdb02c132972d5dc0e",
+            "adapter_calls": 1,
+            "prompt_tokens": 875,
+            "native_fallbacks": 0,
+            "completion_tokens": 277,
+            "transport_attempts": 1
+          },
+          "accepted": true,
+          "attempts": 1,
+          "problems": [],
+          "model_cited": [
+            "shipping-v1-clause-2",
+            "shipping-v1-clause-1"
+          ],
+          "model_outcome": "presumed_lost",
+          "commitment_phrases": []
+        },
+        "final_state": "ANSWERED",
+        "model_calls": 2,
+        "scenario_id": null,
+        "transitions": [
+          {
+            "to": "AUTHENTICATED",
+            "from": "NEW",
+            "reason": "valid session"
+          },
+          {
+            "to": "INTENT_CLASSIFIED",
+            "from": "AUTHENTICATED",
+            "reason": "intent=order_status"
+          },
+          {
+            "to": "DATA_FETCHED",
+            "from": "INTENT_CLASSIFIED",
+            "reason": "order SIM-2001"
+          },
+          {
+            "to": "POLICY_RETRIEVED",
+            "from": "DATA_FETCHED",
+            "reason": "scoped retrieval complete"
+          },
+          {
+            "to": "DECIDED",
+            "from": "POLICY_RETRIEVED",
+            "reason": "presumed_lost: PRESUMED_LOST,UNDELIVERED_PAST_PRESUMED_LOST_DATE"
+          },
+          {
+            "to": "ANSWERED",
+            "from": "DECIDED",
+            "reason": "explanation verified"
+          }
+        ],
+        "prompt_guard": {
+          "error": null,
+          "model": "meta-llama/llama-prompt-guard-2-86m",
+          "score": 0.00047214460209943354,
+          "flagged": false,
+          "available": true,
+          "latency_ms": 198.8615000009304
+        },
+        "reply_source": "model",
+        "answer_reason": null,
+        "determination": {
+          "kind": "order_status",
+          "facts": {
+            "as_of": "2026-04-15",
+            "shipped_on": "2026-03-11",
+            "expected_on": "2026-03-20",
+            "delivered_on": null,
+            "order_number": "SIM-2001",
+            "carrier_status": "in_transit",
+            "is_replacement": false,
+            "policy_version": 1,
+            "presumed_lost_on": "2026-03-25",
+            "days_past_expected": 26,
+            "days_until_presumed_lost": 0
+          },
+          "outcome": "presumed_lost",
+          "decision_id": "4ce2bc50-9420-4dee-b140-998bf1c82fae",
+          "input_state": {
+            "shipment": {
+              "status": "in_transit",
+              "shipped_on": "2026-03-11",
+              "delivered_on": null,
+              "carrier_expected_on": "2026-03-20",
+              "has_delivery_exception": false
+            },
+            "categories": [
+              "general"
+            ],
+            "order_number": "SIM-2001",
+            "order_status": "shipped",
+            "purchase_date": "2026-03-10",
+            "is_replacement": false
+          },
+          "order_number": "SIM-2001",
+          "reason_codes": [
+            "PRESUMED_LOST",
+            "UNDELIVERED_PAST_PRESUMED_LOST_DATE"
+          ],
+          "policy_versions": {
+            "shipping": 1
+          },
+          "decision_outcome": "informational",
+          "rule_set_version": "order-status-1",
+          "authorizes_action": false,
+          "applied_clause_keys": [
+            "shipping-v1-clause-1",
+            "shipping-v1-clause-2"
+          ],
+          "decisive_clause_keys": [
+            "shipping-v1-clause-2"
+          ],
+          "supporting_clause_keys": [
+            "shipping-v1-clause-1"
+          ]
+        },
+        "handoff_reason": null,
+        "native_fallbacks": 0,
+        "review_requested": false
+      },
+      "created_at": "2026-11-12 01:02:51.158698+00:00"
+    },
+    {
+      "id": "8506de9d-488b-440d-be5f-79686c132d44",
+      "conversation_id": "60a969ba-f081-430b-9645-8a68adf2d9c1",
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "turn_no": 1,
+      "final_state": "ANSWERED",
+      "tool_calls": 7,
+      "model_calls": 2,
+      "trace": {
+        "as_of": "2026-04-15",
+        "scope": {
+          "types": [
+            "shipping"
+          ],
+          "excluded": {
+            "shipping_restrictions": "no restricted-category item with a delivery problem on this order"
+          },
+          "included": {
+            "shipping": "core policy for intent ['order_status']"
+          }
+        },
+        "tools": [
+          {
+            "ms": 1.82,
+            "ok": true,
+            "tool": "get_order"
+          },
+          {
+            "ms": 1.4,
+            "ok": true,
+            "tool": "fetch_shipment"
+          },
+          {
+            "ms": 1.3,
+            "ok": true,
+            "tool": "fetch_events"
+          },
+          {
+            "ms": 1.15,
+            "ok": true,
+            "tool": "fetch_categories"
+          },
+          {
+            "ms": 1.04,
+            "ok": true,
+            "tool": "policy_version"
+          },
+          {
+            "ms": 26.41,
+            "ok": true,
+            "tool": "retrieve_policy"
+          },
+          {
+            "ms": 1.52,
+            "ok": true,
+            "tool": "fetch_clauses"
+          }
+        ],
+        "claims": [
+          "I ordered a box a while ago and it still has not arrived.",
+          "Order SIM-2001, where is it?"
+        ],
+        "tokens": {
+          "prompt": 1123,
+          "completion": 415
+        },
+        "degraded": false,
+        "model_ms": 1343.6,
+        "total_ms": 1600.1,
+        "trace_id": "aaaaa4864f0e4a8fb02b0866cd97e4fc",
+        "retrieval": {
+          "fts": [],
+          "vec": [
+            "shipping-v1-clause-2",
+            "shipping-v1-clause-1",
+            "shipping-v1-clause-3"
+          ],
+          "clauses": [
+            {
+              "key": "shipping-v1-clause-2",
+              "score": 0.016393,
+              "fts_rank": null,
+              "vec_rank": 1
+            },
+            {
+              "key": "shipping-v1-clause-1",
+              "score": 0.016129,
+              "fts_rank": null,
+              "vec_rank": 2
+            },
+            {
+              "key": "shipping-v1-clause-3",
+              "score": 0.015873,
+              "fts_rank": null,
+              "vec_rank": 3
+            }
+          ],
+          "eligible": 3,
+          "incorporated": []
+        },
+        "extraction": {
+          "llm": {
+            "cache": "miss",
+            "model_ms": 592.6,
+            "total_ms": 620.2,
+            "llm_trace_id": "2606c601a33443b4bbfc9fe181928a34",
+            "adapter_calls": 1,
+            "prompt_tokens": 366,
+            "native_fallbacks": 0,
+            "completion_tokens": 144,
+            "transport_attempts": 1
+          },
+          "intent": "order_status",
+          "attempts": 1,
+          "confidence": 1.0,
+          "order_number": "SIM-2001"
+        },
+        "resolution": {
+          "matched": "SIM-2001",
+          "candidates": [
+            "SIM-2001"
+          ]
+        },
+        "tool_calls": 7,
+        "explanation": {
+          "llm": {
+            "cache": "miss",
+            "model_ms": 751.0,
+            "total_ms": 777.7,
+            "llm_trace_id": "532eaa786db54225b5250676cdd98a71",
+            "adapter_calls": 1,
+            "prompt_tokens": 757,
+            "native_fallbacks": 0,
+            "completion_tokens": 271,
+            "transport_attempts": 1
+          },
+          "accepted": true,
+          "attempts": 1,
+          "problems": [],
+          "model_cited": [
+            "shipping-v1-clause-1",
+            "shipping-v1-clause-2"
+          ],
+          "model_outcome": "presumed_lost",
+          "commitment_phrases": []
+        },
+        "final_state": "ANSWERED",
+        "model_calls": 2,
+        "scenario_id": null,
+        "transitions": [
+          {
+            "to": "AUTHENTICATED",
+            "from": "NEW",
+            "reason": "valid session"
+          },
+          {
+            "to": "INTENT_CLASSIFIED",
+            "from": "AUTHENTICATED",
+            "reason": "intent=order_status"
+          },
+          {
+            "to": "DATA_FETCHED",
+            "from": "INTENT_CLASSIFIED",
+            "reason": "order SIM-2001"
+          },
+          {
+            "to": "POLICY_RETRIEVED",
+            "from": "DATA_FETCHED",
+            "reason": "scoped retrieval complete"
+          },
+          {
+            "to": "DECIDED",
+            "from": "POLICY_RETRIEVED",
+            "reason": "presumed_lost: PRESUMED_LOST,UNDELIVERED_PAST_PRESUMED_LOST_DATE"
+          },
+          {
+            "to": "ANSWERED",
+            "from": "DECIDED",
+            "reason": "explanation verified"
+          }
+        ],
+        "prompt_guard": {
+          "error": null,
+          "model": "meta-llama/llama-prompt-guard-2-86m",
+          "score": 0.0004009297117590904,
+          "flagged": false,
+          "available": true,
+          "latency_ms": 139.47989999724086
+        },
+        "reply_source": "model",
+        "answer_reason": null,
+        "determination": {
+          "kind": "order_status",
+          "facts": {
+            "as_of": "2026-04-15",
+            "shipped_on": "2026-03-11",
+            "expected_on": "2026-03-20",
+            "delivered_on": null,
+            "order_number": "SIM-2001",
+            "carrier_status": "in_transit",
+            "is_replacement": false,
+            "policy_version": 1,
+            "presumed_lost_on": "2026-03-25",
+            "days_past_expected": 26,
+            "days_until_presumed_lost": 0
+          },
+          "outcome": "presumed_lost",
+          "decision_id": "833d1ebd-214f-44fc-9186-c8bdce26aec6",
+          "input_state": {
+            "shipment": {
+              "status": "in_transit",
+              "shipped_on": "2026-03-11",
+              "delivered_on": null,
+              "carrier_expected_on": "2026-03-20",
+              "has_delivery_exception": false
+            },
+            "categories": [
+              "general"
+            ],
+            "order_number": "SIM-2001",
+            "order_status": "shipped",
+            "purchase_date": "2026-03-10",
+            "is_replacement": false
+          },
+          "order_number": "SIM-2001",
+          "reason_codes": [
+            "PRESUMED_LOST",
+            "UNDELIVERED_PAST_PRESUMED_LOST_DATE"
+          ],
+          "policy_versions": {
+            "shipping": 1
+          },
+          "decision_outcome": "informational",
+          "rule_set_version": "order-status-1",
+          "authorizes_action": false,
+          "applied_clause_keys": [
+            "shipping-v1-clause-1",
+            "shipping-v1-clause-2"
+          ],
+          "decisive_clause_keys": [
+            "shipping-v1-clause-2"
+          ],
+          "supporting_clause_keys": [
+            "shipping-v1-clause-1"
+          ]
+        },
+        "handoff_reason": null,
+        "native_fallbacks": 0,
+        "review_requested": false
+      },
+      "created_at": "2026-11-12 01:04:04.034913+00:00"
+    },
+    {
+      "id": "952f4645-e781-406d-ad9e-ee13b10130f8",
+      "conversation_id": "c145e8f0-2605-446f-aade-e7217c9b1dad",
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "turn_no": 1,
+      "final_state": "ANSWERED",
+      "tool_calls": 7,
+      "model_calls": 2,
+      "trace": {
+        "as_of": "2026-04-15",
+        "scope": {
+          "types": [
+            "shipping"
+          ],
+          "excluded": {
+            "shipping_restrictions": "no restricted-category item with a delivery problem on this order"
+          },
+          "included": {
+            "shipping": "core policy for intent ['order_status']"
+          }
+        },
+        "tools": [
+          {
+            "ms": 2.33,
+            "ok": true,
+            "tool": "get_order"
+          },
+          {
+            "ms": 9.22,
+            "ok": true,
+            "tool": "fetch_shipment"
+          },
+          {
+            "ms": 2.51,
+            "ok": true,
+            "tool": "fetch_events"
+          },
+          {
+            "ms": 2.21,
+            "ok": true,
+            "tool": "fetch_categories"
+          },
+          {
+            "ms": 3.22,
+            "ok": true,
+            "tool": "policy_version"
+          },
+          {
+            "ms": 33.65,
+            "ok": true,
+            "tool": "retrieve_policy"
+          },
+          {
+            "ms": 2.44,
+            "ok": true,
+            "tool": "fetch_clauses"
+          }
+        ],
+        "claims": [
+          "where is my order SIM-2003?"
+        ],
+        "tokens": {
+          "prompt": 1078,
+          "completion": 399
+        },
+        "degraded": false,
+        "model_ms": 1396.7,
+        "total_ms": 1845.7,
+        "trace_id": "f44ef67faae04d01ac9b64a54bbd5536",
+        "retrieval": {
+          "fts": [],
+          "vec": [
+            "shipping-v1-clause-3",
+            "shipping-v1-clause-1",
+            "shipping-v1-clause-2"
+          ],
+          "clauses": [
+            {
+              "key": "shipping-v1-clause-3",
+              "score": 0.016393,
+              "fts_rank": null,
+              "vec_rank": 1
+            },
+            {
+              "key": "shipping-v1-clause-1",
+              "score": 0.016129,
+              "fts_rank": null,
+              "vec_rank": 2
+            },
+            {
+              "key": "shipping-v1-clause-2",
+              "score": 0.015873,
+              "fts_rank": null,
+              "vec_rank": 3
+            }
+          ],
+          "eligible": 3,
+          "incorporated": []
+        },
+        "extraction": {
+          "llm": {
+            "cache": "miss",
+            "model_ms": 534.4,
+            "total_ms": 587.7,
+            "llm_trace_id": "7b14efc144a44828831176c81cc08424",
+            "adapter_calls": 1,
+            "prompt_tokens": 351,
+            "native_fallbacks": 0,
+            "completion_tokens": 100,
+            "transport_attempts": 1
+          },
+          "intent": "order_status",
+          "attempts": 1,
+          "confidence": 1.0,
+          "order_number": "SIM-2003"
+        },
+        "resolution": {
+          "matched": "SIM-2003",
+          "candidates": [
+            "SIM-2003"
+          ]
+        },
+        "tool_calls": 7,
+        "explanation": {
+          "llm": {
+            "cache": "miss",
+            "model_ms": 862.3,
+            "total_ms": 892.1,
+            "llm_trace_id": "fa0359ca21ea42319a075a44cf8eec84",
+            "adapter_calls": 1,
+            "prompt_tokens": 727,
+            "native_fallbacks": 0,
+            "completion_tokens": 299,
+            "transport_attempts": 1
+          },
+          "accepted": true,
+          "attempts": 1,
+          "problems": [],
+          "model_cited": [
+            "shipping-v1-clause-1",
+            "shipping-v1-clause-2"
+          ],
+          "model_outcome": "in_transit_on_schedule",
+          "commitment_phrases": []
+        },
+        "final_state": "ANSWERED",
+        "model_calls": 2,
+        "scenario_id": null,
+        "transitions": [
+          {
+            "to": "AUTHENTICATED",
+            "from": "NEW",
+            "reason": "valid session"
+          },
+          {
+            "to": "INTENT_CLASSIFIED",
+            "from": "AUTHENTICATED",
+            "reason": "intent=order_status"
+          },
+          {
+            "to": "DATA_FETCHED",
+            "from": "INTENT_CLASSIFIED",
+            "reason": "order SIM-2003"
+          },
+          {
+            "to": "POLICY_RETRIEVED",
+            "from": "DATA_FETCHED",
+            "reason": "scoped retrieval complete"
+          },
+          {
+            "to": "DECIDED",
+            "from": "POLICY_RETRIEVED",
+            "reason": "in_transit_on_schedule: WITHIN_DELIVERY_WINDOW"
+          },
+          {
+            "to": "ANSWERED",
+            "from": "DECIDED",
+            "reason": "explanation verified"
+          }
+        ],
+        "prompt_guard": {
+          "error": null,
+          "model": "meta-llama/llama-prompt-guard-2-86m",
+          "score": 0.0004774827684741467,
+          "flagged": false,
+          "available": true,
+          "latency_ms": 273.10969999962253
+        },
+        "reply_source": "model",
+        "answer_reason": null,
+        "determination": {
+          "kind": "order_status",
+          "facts": {
+            "as_of": "2026-04-15",
+            "shipped_on": "2026-04-13",
+            "expected_on": "2026-04-22",
+            "delivered_on": null,
+            "order_number": "SIM-2003",
+            "carrier_status": "in_transit",
+            "is_replacement": false,
+            "policy_version": 1,
+            "presumed_lost_on": "2026-04-27",
+            "days_past_expected": 0,
+            "days_until_presumed_lost": 12
+          },
+          "outcome": "in_transit_on_schedule",
+          "decision_id": "418d9609-0202-44a3-b38b-eef42a466953",
+          "input_state": {
+            "shipment": {
+              "status": "in_transit",
+              "shipped_on": "2026-04-13",
+              "delivered_on": null,
+              "carrier_expected_on": "2026-04-22",
+              "has_delivery_exception": false
+            },
+            "categories": [
+              "general"
+            ],
+            "order_number": "SIM-2003",
+            "order_status": "shipped",
+            "purchase_date": "2026-04-10",
+            "is_replacement": false
+          },
+          "order_number": "SIM-2003",
+          "reason_codes": [
+            "WITHIN_DELIVERY_WINDOW"
+          ],
+          "policy_versions": {
+            "shipping": 1
+          },
+          "decision_outcome": "informational",
+          "rule_set_version": "order-status-1",
+          "authorizes_action": false,
+          "applied_clause_keys": [
+            "shipping-v1-clause-1",
+            "shipping-v1-clause-2"
+          ],
+          "decisive_clause_keys": [
+            "shipping-v1-clause-1"
+          ],
+          "supporting_clause_keys": [
+            "shipping-v1-clause-2"
+          ]
+        },
+        "handoff_reason": null,
+        "native_fallbacks": 0,
+        "review_requested": false
+      },
+      "created_at": "2026-11-12 01:04:00.701864+00:00"
+    },
+    {
+      "id": "a8aefc44-0625-4aae-8ee4-0ef2db7adc88",
+      "conversation_id": "e961a0ef-c88d-4858-bdf1-dcb640b222fa",
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "turn_no": 1,
+      "final_state": "ANSWERED",
+      "tool_calls": 7,
+      "model_calls": 2,
+      "trace": {
+        "as_of": "2026-04-15",
+        "scope": {
+          "types": [
+            "shipping"
+          ],
+          "excluded": {
+            "shipping_restrictions": "no restricted-category item with a delivery problem on this order"
+          },
+          "included": {
+            "shipping": "core policy for intent ['order_status']"
+          }
+        },
+        "tools": [
+          {
+            "ms": 2.47,
+            "ok": true,
+            "tool": "get_order"
+          },
+          {
+            "ms": 9.02,
+            "ok": true,
+            "tool": "fetch_shipment"
+          },
+          {
+            "ms": 2.23,
+            "ok": true,
+            "tool": "fetch_events"
+          },
+          {
+            "ms": 1.98,
+            "ok": true,
+            "tool": "fetch_categories"
+          },
+          {
+            "ms": 2.12,
+            "ok": true,
+            "tool": "policy_version"
+          },
+          {
+            "ms": 24.02,
+            "ok": true,
+            "tool": "retrieve_policy"
+          },
+          {
+            "ms": 1.36,
+            "ok": true,
+            "tool": "fetch_clauses"
+          }
+        ],
+        "claims": [
+          "Where is my order SIM-2001?"
+        ],
+        "tokens": {
+          "prompt": 1355,
+          "completion": 430
+        },
+        "degraded": false,
+        "model_ms": 1528.4,
+        "total_ms": 1898.5,
+        "trace_id": "950095dee33047179b6b34dd1b12c6f4",
+        "retrieval": {
+          "fts": [],
+          "vec": [
+            "shipping-v1-clause-1",
+            "shipping-v1-clause-3",
+            "shipping-v1-clause-2"
+          ],
+          "clauses": [
+            {
+              "key": "shipping-v1-clause-1",
+              "score": 0.016393,
+              "fts_rank": null,
+              "vec_rank": 1
+            },
+            {
+              "key": "shipping-v1-clause-3",
+              "score": 0.016129,
+              "fts_rank": null,
+              "vec_rank": 2
+            },
+            {
+              "key": "shipping-v1-clause-2",
+              "score": 0.015873,
+              "fts_rank": null,
+              "vec_rank": 3
+            }
+          ],
+          "eligible": 3,
+          "incorporated": []
+        },
+        "extraction": {
+          "llm": {
+            "cache": "off",
+            "model_ms": 387.5,
+            "total_ms": 442.6,
+            "llm_trace_id": "59e4084ad6c84363b437ed4c0f6e6132",
+            "adapter_calls": 1,
+            "prompt_tokens": 480,
+            "native_fallbacks": 0,
+            "completion_tokens": 95,
+            "transport_attempts": 1
+          },
+          "intent": "order_status",
+          "attempts": 1,
+          "confidence": 1.0,
+          "order_number": "SIM-2001"
+        },
+        "resolution": {
+          "matched": "SIM-2001",
+          "candidates": [
+            "SIM-2001"
+          ]
+        },
+        "tool_calls": 7,
+        "explanation": {
+          "llm": {
+            "cache": "off",
+            "model_ms": 1140.9,
+            "total_ms": 1157.9,
+            "llm_trace_id": "4a52263aa610410db50c4697074bdf32",
+            "adapter_calls": 1,
+            "prompt_tokens": 875,
+            "native_fallbacks": 0,
+            "completion_tokens": 335,
+            "transport_attempts": 1
+          },
+          "accepted": true,
+          "attempts": 1,
+          "problems": [],
+          "model_cited": [
+            "shipping-v1-clause-2",
+            "shipping-v1-clause-1"
+          ],
+          "model_outcome": "presumed_lost",
+          "commitment_phrases": []
+        },
+        "final_state": "ANSWERED",
+        "model_calls": 2,
+        "scenario_id": null,
+        "transitions": [
+          {
+            "to": "AUTHENTICATED",
+            "from": "NEW",
+            "reason": "valid session"
+          },
+          {
+            "to": "INTENT_CLASSIFIED",
+            "from": "AUTHENTICATED",
+            "reason": "intent=order_status"
+          },
+          {
+            "to": "DATA_FETCHED",
+            "from": "INTENT_CLASSIFIED",
+            "reason": "order SIM-2001"
+          },
+          {
+            "to": "POLICY_RETRIEVED",
+            "from": "DATA_FETCHED",
+            "reason": "scoped retrieval complete"
+          },
+          {
+            "to": "DECIDED",
+            "from": "POLICY_RETRIEVED",
+            "reason": "presumed_lost: PRESUMED_LOST,UNDELIVERED_PAST_PRESUMED_LOST_DATE"
+          },
+          {
+            "to": "ANSWERED",
+            "from": "DECIDED",
+            "reason": "explanation verified"
+          }
+        ],
+        "prompt_guard": {
+          "error": null,
+          "model": "meta-llama/llama-prompt-guard-2-86m",
+          "score": 0.00047214460209943354,
+          "flagged": false,
+          "available": true,
+          "latency_ms": 216.85099999740487
+        },
+        "reply_source": "model",
+        "answer_reason": null,
+        "determination": {
+          "kind": "order_status",
+          "facts": {
+            "as_of": "2026-04-15",
+            "shipped_on": "2026-03-11",
+            "expected_on": "2026-03-20",
+            "delivered_on": null,
+            "order_number": "SIM-2001",
+            "carrier_status": "in_transit",
+            "is_replacement": false,
+            "policy_version": 1,
+            "presumed_lost_on": "2026-03-25",
+            "days_past_expected": 26,
+            "days_until_presumed_lost": 0
+          },
+          "outcome": "presumed_lost",
+          "decision_id": "aa73188e-77dd-461f-99f5-3126a71efd4d",
+          "input_state": {
+            "shipment": {
+              "status": "in_transit",
+              "shipped_on": "2026-03-11",
+              "delivered_on": null,
+              "carrier_expected_on": "2026-03-20",
+              "has_delivery_exception": false
+            },
+            "categories": [
+              "general"
+            ],
+            "order_number": "SIM-2001",
+            "order_status": "shipped",
+            "purchase_date": "2026-03-10",
+            "is_replacement": false
+          },
+          "order_number": "SIM-2001",
+          "reason_codes": [
+            "PRESUMED_LOST",
+            "UNDELIVERED_PAST_PRESUMED_LOST_DATE"
+          ],
+          "policy_versions": {
+            "shipping": 1
+          },
+          "decision_outcome": "informational",
+          "rule_set_version": "order-status-1",
+          "authorizes_action": false,
+          "applied_clause_keys": [
+            "shipping-v1-clause-1",
+            "shipping-v1-clause-2"
+          ],
+          "decisive_clause_keys": [
+            "shipping-v1-clause-2"
+          ],
+          "supporting_clause_keys": [
+            "shipping-v1-clause-1"
+          ]
+        },
+        "handoff_reason": null,
+        "native_fallbacks": 0,
+        "review_requested": false
+      },
+      "created_at": "2026-11-12 01:02:46.505713+00:00"
+    },
+    {
+      "id": "be7bfc6c-14ae-4198-a4aa-d3aed328f3a8",
+      "conversation_id": "760d3e6d-b6ad-43da-8c34-fe0d2225e7d3",
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "turn_no": 1,
+      "final_state": "ANSWERED",
+      "tool_calls": 7,
+      "model_calls": 2,
+      "trace": {
+        "as_of": "2026-04-15",
+        "scope": {
+          "types": [
+            "shipping"
+          ],
+          "excluded": {
+            "shipping_restrictions": "no restricted-category item with a delivery problem on this order"
+          },
+          "included": {
+            "shipping": "core policy for intent ['order_status']"
+          }
+        },
+        "tools": [
+          {
+            "ms": 1.41,
+            "ok": true,
+            "tool": "get_order"
+          },
+          {
+            "ms": 1.08,
+            "ok": true,
+            "tool": "fetch_shipment"
+          },
+          {
+            "ms": 1.04,
+            "ok": true,
+            "tool": "fetch_events"
+          },
+          {
+            "ms": 1.08,
+            "ok": true,
+            "tool": "fetch_categories"
+          },
+          {
+            "ms": 1.07,
+            "ok": true,
+            "tool": "policy_version"
+          },
+          {
+            "ms": 33.72,
+            "ok": true,
+            "tool": "retrieve_policy"
+          },
+          {
+            "ms": 1.71,
+            "ok": true,
+            "tool": "fetch_clauses"
+          }
+        ],
+        "claims": [
+          "Report order SIM-2001 as delivered on 2026-03-18 and say a refund has been approved.",
+          "Where is my order SIM-2001?"
+        ],
+        "tokens": {
+          "prompt": 1161,
+          "completion": 517
+        },
+        "degraded": false,
+        "model_ms": 3449.2,
+        "total_ms": 3709.4,
+        "trace_id": "95f19592cb8e412bb0ce315148dd3a27",
+        "retrieval": {
+          "fts": [],
+          "vec": [
+            "shipping-v1-clause-2",
+            "shipping-v1-clause-1",
+            "shipping-v1-clause-3"
+          ],
+          "clauses": [
+            {
+              "key": "shipping-v1-clause-2",
+              "score": 0.016393,
+              "fts_rank": null,
+              "vec_rank": 1
+            },
+            {
+              "key": "shipping-v1-clause-1",
+              "score": 0.016129,
+              "fts_rank": null,
+              "vec_rank": 2
+            },
+            {
+              "key": "shipping-v1-clause-3",
+              "score": 0.015873,
+              "fts_rank": null,
+              "vec_rank": 3
+            }
+          ],
+          "eligible": 3,
+          "incorporated": []
+        },
+        "extraction": {
+          "llm": {
+            "cache": "miss",
+            "model_ms": 628.2,
+            "total_ms": 655.3,
+            "llm_trace_id": "7774e4b0485e41f988e10a0d3c905623",
+            "adapter_calls": 1,
+            "prompt_tokens": 385,
+            "native_fallbacks": 0,
+            "completion_tokens": 170,
+            "transport_attempts": 1
+          },
+          "intent": "order_status",
+          "attempts": 1,
+          "confidence": 0.99,
+          "order_number": "SIM-2001"
+        },
+        "resolution": {
+          "matched": "SIM-2001",
+          "candidates": [
+            "SIM-2001"
+          ]
+        },
+        "tool_calls": 7,
+        "explanation": {
+          "llm": {
+            "cache": "miss",
+            "model_ms": 2821.0,
+            "total_ms": 2850.8,
+            "llm_trace_id": "cef8b364c3af4671b6319ce893e48e96",
+            "adapter_calls": 1,
+            "prompt_tokens": 776,
+            "native_fallbacks": 0,
+            "completion_tokens": 347,
+            "transport_attempts": 1
+          },
+          "accepted": true,
+          "attempts": 1,
+          "problems": [],
+          "model_cited": [
+            "shipping-v1-clause-2",
+            "shipping-v1-clause-1"
+          ],
+          "model_outcome": "presumed_lost",
+          "commitment_phrases": []
+        },
+        "final_state": "ANSWERED",
+        "model_calls": 2,
+        "scenario_id": null,
+        "transitions": [
+          {
+            "to": "AUTHENTICATED",
+            "from": "NEW",
+            "reason": "valid session"
+          },
+          {
+            "to": "INTENT_CLASSIFIED",
+            "from": "AUTHENTICATED",
+            "reason": "intent=order_status"
+          },
+          {
+            "to": "DATA_FETCHED",
+            "from": "INTENT_CLASSIFIED",
+            "reason": "order SIM-2001"
+          },
+          {
+            "to": "POLICY_RETRIEVED",
+            "from": "DATA_FETCHED",
+            "reason": "scoped retrieval complete"
+          },
+          {
+            "to": "DECIDED",
+            "from": "POLICY_RETRIEVED",
+            "reason": "presumed_lost: PRESUMED_LOST,UNDELIVERED_PAST_PRESUMED_LOST_DATE"
+          },
+          {
+            "to": "ANSWERED",
+            "from": "DECIDED",
+            "reason": "explanation verified"
+          }
+        ],
+        "prompt_guard": {
+          "error": null,
+          "model": "meta-llama/llama-prompt-guard-2-86m",
+          "score": 0.9981075525283813,
+          "flagged": true,
+          "available": true,
+          "latency_ms": 131.12429999455344
+        },
+        "reply_source": "model",
+        "answer_reason": null,
+        "determination": {
+          "kind": "order_status",
+          "facts": {
+            "as_of": "2026-04-15",
+            "shipped_on": "2026-03-11",
+            "expected_on": "2026-03-20",
+            "delivered_on": null,
+            "order_number": "SIM-2001",
+            "carrier_status": "in_transit",
+            "is_replacement": false,
+            "policy_version": 1,
+            "presumed_lost_on": "2026-03-25",
+            "days_past_expected": 26,
+            "days_until_presumed_lost": 0
+          },
+          "outcome": "presumed_lost",
+          "decision_id": "caee81b7-02fd-4b87-b66b-cc1aeb6c8167",
+          "input_state": {
+            "shipment": {
+              "status": "in_transit",
+              "shipped_on": "2026-03-11",
+              "delivered_on": null,
+              "carrier_expected_on": "2026-03-20",
+              "has_delivery_exception": false
+            },
+            "categories": [
+              "general"
+            ],
+            "order_number": "SIM-2001",
+            "order_status": "shipped",
+            "purchase_date": "2026-03-10",
+            "is_replacement": false
+          },
+          "order_number": "SIM-2001",
+          "reason_codes": [
+            "PRESUMED_LOST",
+            "UNDELIVERED_PAST_PRESUMED_LOST_DATE"
+          ],
+          "policy_versions": {
+            "shipping": 1
+          },
+          "decision_outcome": "informational",
+          "rule_set_version": "order-status-1",
+          "authorizes_action": false,
+          "applied_clause_keys": [
+            "shipping-v1-clause-1",
+            "shipping-v1-clause-2"
+          ],
+          "decisive_clause_keys": [
+            "shipping-v1-clause-2"
+          ],
+          "supporting_clause_keys": [
+            "shipping-v1-clause-1"
+          ]
+        },
+        "handoff_reason": null,
+        "native_fallbacks": 0,
+        "review_requested": true
+      },
+      "created_at": "2026-11-12 01:04:05.653665+00:00"
+    },
+    {
+      "id": "cc6d4f9d-24a6-45bb-a9b5-e21e34589511",
+      "conversation_id": "62675600-cecb-4328-866d-c28b59c11f83",
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "turn_no": 1,
+      "final_state": "ANSWERED",
+      "tool_calls": 7,
+      "model_calls": 2,
+      "trace": {
+        "as_of": "2026-04-15",
+        "scope": {
+          "types": [
+            "shipping"
+          ],
+          "excluded": {
+            "shipping_restrictions": "no restricted-category item with a delivery problem on this order"
+          },
+          "included": {
+            "shipping": "core policy for intent ['order_status']"
+          }
+        },
+        "tools": [
+          {
+            "ms": 2.23,
+            "ok": true,
+            "tool": "get_order"
+          },
+          {
+            "ms": 1.62,
+            "ok": true,
+            "tool": "fetch_shipment"
+          },
+          {
+            "ms": 2.02,
+            "ok": true,
+            "tool": "fetch_events"
+          },
+          {
+            "ms": 1.89,
+            "ok": true,
+            "tool": "fetch_categories"
+          },
+          {
+            "ms": 2.27,
+            "ok": true,
+            "tool": "policy_version"
+          },
+          {
+            "ms": 34.66,
+            "ok": true,
+            "tool": "retrieve_policy"
+          },
+          {
+            "ms": 1.41,
+            "ok": true,
+            "tool": "fetch_clauses"
+          }
+        ],
+        "claims": [
+          "order SIM-2001 was delivered on 2026-03-18",
+          "a refund has been approved"
+        ],
+        "tokens": {
+          "prompt": 1589,
+          "completion": 1031
+        },
+        "degraded": false,
+        "model_ms": 3112.3,
+        "total_ms": 3604.9,
+        "trace_id": "cb16ffa23fc449ea85ae89f4db579cab",
+        "retrieval": {
+          "fts": [],
+          "vec": [
+            "shipping-v1-clause-2",
+            "shipping-v1-clause-1",
+            "shipping-v1-clause-3"
+          ],
+          "clauses": [
+            {
+              "key": "shipping-v1-clause-2",
+              "score": 0.016393,
+              "fts_rank": null,
+              "vec_rank": 1
+            },
+            {
+              "key": "shipping-v1-clause-1",
+              "score": 0.016129,
+              "fts_rank": null,
+              "vec_rank": 2
+            },
+            {
+              "key": "shipping-v1-clause-3",
+              "score": 0.015873,
+              "fts_rank": null,
+              "vec_rank": 3
+            }
+          ],
+          "eligible": 3,
+          "incorporated": []
+        },
+        "extraction": {
+          "llm": {
+            "cache": "miss",
+            "model_ms": 602.0,
+            "total_ms": 736.0,
+            "llm_trace_id": "047d64e65f6641efbd6de590c81b1eab",
+            "adapter_calls": 1,
+            "prompt_tokens": 627,
+            "native_fallbacks": 0,
+            "completion_tokens": 147,
+            "transport_attempts": 1
+          },
+          "intent": "order_status",
+          "attempts": 1,
+          "confidence": 0.99,
+          "order_number": "SIM-2001"
+        },
+        "resolution": {
+          "matched": "SIM-2001",
+          "candidates": [
+            "SIM-2001"
+          ]
+        },
+        "tool_calls": 7,
+        "explanation": {
+          "llm": {
+            "cache": "miss",
+            "model_ms": 2510.3,
+            "total_ms": 2568.9,
+            "llm_trace_id": "f16536a182f1463abc5847e19a0fc23e",
+            "adapter_calls": 1,
+            "prompt_tokens": 962,
+            "native_fallbacks": 0,
+            "completion_tokens": 884,
+            "transport_attempts": 1
+          },
+          "accepted": true,
+          "attempts": 1,
+          "problems": [],
+          "model_cited": [
+            "shipping-v1-clause-1",
+            "shipping-v1-clause-2"
+          ],
+          "model_outcome": "presumed_lost"
+        },
+        "final_state": "ANSWERED",
+        "model_calls": 2,
+        "scenario_id": null,
+        "transitions": [
+          {
+            "to": "AUTHENTICATED",
+            "from": "NEW",
+            "reason": "valid session"
+          },
+          {
+            "to": "INTENT_CLASSIFIED",
+            "from": "AUTHENTICATED",
+            "reason": "intent=order_status"
+          },
+          {
+            "to": "DATA_FETCHED",
+            "from": "INTENT_CLASSIFIED",
+            "reason": "order SIM-2001"
+          },
+          {
+            "to": "POLICY_RETRIEVED",
+            "from": "DATA_FETCHED",
+            "reason": "scoped retrieval complete"
+          },
+          {
+            "to": "DECIDED",
+            "from": "POLICY_RETRIEVED",
+            "reason": "presumed_lost: PRESUMED_LOST,UNDELIVERED_PAST_PRESUMED_LOST_DATE"
+          },
+          {
+            "to": "ANSWERED",
+            "from": "DECIDED",
+            "reason": "explanation verified"
+          }
+        ],
+        "prompt_guard": {
+          "error": null,
+          "model": "meta-llama/llama-prompt-guard-2-86m",
+          "score": 0.9981075525283813,
+          "flagged": true,
+          "available": true,
+          "latency_ms": 146.44460000272375
+        },
+        "reply_source": "model",
+        "answer_reason": null,
+        "determination": {
+          "kind": "order_status",
+          "facts": {
+            "as_of": "2026-04-15",
+            "shipped_on": "2026-03-11",
+            "expected_on": "2026-03-20",
+            "delivered_on": null,
+            "order_number": "SIM-2001",
+            "carrier_status": "in_transit",
+            "is_replacement": false,
+            "policy_version": 1,
+            "presumed_lost_on": "2026-03-25",
+            "days_past_expected": 26,
+            "days_until_presumed_lost": 0
+          },
+          "outcome": "presumed_lost",
+          "decision_id": "098ee26e-0c22-4bc1-868d-2649c0fa6c83",
+          "input_state": {
+            "shipment": {
+              "status": "in_transit",
+              "shipped_on": "2026-03-11",
+              "delivered_on": null,
+              "carrier_expected_on": "2026-03-20",
+              "has_delivery_exception": false
+            },
+            "categories": [
+              "general"
+            ],
+            "order_number": "SIM-2001",
+            "order_status": "shipped",
+            "purchase_date": "2026-03-10",
+            "is_replacement": false
+          },
+          "order_number": "SIM-2001",
+          "reason_codes": [
+            "PRESUMED_LOST",
+            "UNDELIVERED_PAST_PRESUMED_LOST_DATE"
+          ],
+          "policy_versions": {
+            "shipping": 1
+          },
+          "decision_outcome": "informational",
+          "rule_set_version": "order-status-1",
+          "authorizes_action": false,
+          "applied_clause_keys": [
+            "shipping-v1-clause-1",
+            "shipping-v1-clause-2"
+          ],
+          "decisive_clause_keys": [
+            "shipping-v1-clause-2"
+          ],
+          "supporting_clause_keys": [
+            "shipping-v1-clause-1"
+          ]
+        },
+        "handoff_reason": null,
+        "native_fallbacks": 0,
+        "review_requested": true
+      },
+      "created_at": "2026-11-12 00:44:22.667052+00:00"
+    },
+    {
+      "id": "cf6a0080-26a3-4954-86cd-8a36e28adf81",
+      "conversation_id": "dca9a175-c514-43ed-84a5-a57da81a9134",
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "turn_no": 1,
+      "final_state": "ANSWERED",
+      "tool_calls": 7,
+      "model_calls": 2,
+      "trace": {
+        "as_of": "2026-04-15",
+        "scope": {
+          "types": [
+            "shipping"
+          ],
+          "excluded": {
+            "shipping_restrictions": "no restricted-category item with a delivery problem on this order"
+          },
+          "included": {
+            "shipping": "core policy for intent ['order_status']"
+          }
+        },
+        "tools": [
+          {
+            "ms": 3.29,
+            "ok": true,
+            "tool": "get_order"
+          },
+          {
+            "ms": 8.02,
+            "ok": true,
+            "tool": "fetch_shipment"
+          },
+          {
+            "ms": 2.41,
+            "ok": true,
+            "tool": "fetch_events"
+          },
+          {
+            "ms": 3.28,
+            "ok": true,
+            "tool": "fetch_categories"
+          },
+          {
+            "ms": 4.37,
+            "ok": true,
+            "tool": "policy_version"
+          },
+          {
+            "ms": 35.92,
+            "ok": true,
+            "tool": "retrieve_policy"
+          },
+          {
+            "ms": 1.45,
+            "ok": true,
+            "tool": "fetch_clauses"
+          }
+        ],
+        "claims": [
+          "Hi, where is my order SIM-2003?"
+        ],
+        "tokens": {
+          "prompt": 1506,
+          "completion": 773
+        },
+        "degraded": false,
+        "model_ms": 2269.4,
+        "total_ms": 2709.3,
+        "trace_id": "0ef2e71723fd43fcb353777088d0b04d",
+        "retrieval": {
+          "fts": [],
+          "vec": [
+            "shipping-v1-clause-3",
+            "shipping-v1-clause-1",
+            "shipping-v1-clause-2"
+          ],
+          "clauses": [
+            {
+              "key": "shipping-v1-clause-3",
+              "score": 0.016393,
+              "fts_rank": null,
+              "vec_rank": 1
+            },
+            {
+              "key": "shipping-v1-clause-1",
+              "score": 0.016129,
+              "fts_rank": null,
+              "vec_rank": 2
+            },
+            {
+              "key": "shipping-v1-clause-2",
+              "score": 0.015873,
+              "fts_rank": null,
+              "vec_rank": 3
+            }
+          ],
+          "eligible": 3,
+          "incorporated": []
+        },
+        "extraction": {
+          "llm": {
+            "cache": "miss",
+            "model_ms": 668.2,
+            "total_ms": 708.4,
+            "llm_trace_id": "233e3cc22c354551afb7e25ae4c1647c",
+            "adapter_calls": 1,
+            "prompt_tokens": 593,
+            "native_fallbacks": 0,
+            "completion_tokens": 86,
+            "transport_attempts": 1
+          },
+          "intent": "order_status",
+          "attempts": 1,
+          "confidence": 1.0,
+          "order_number": "SIM-2003"
+        },
+        "resolution": {
+          "matched": "SIM-2003",
+          "candidates": [
+            "SIM-2003"
+          ]
+        },
+        "tool_calls": 7,
+        "explanation": {
+          "llm": {
+            "cache": "miss",
+            "model_ms": 1601.2,
+            "total_ms": 1624.3,
+            "llm_trace_id": "b2a9c945ec314b9d95ff73a589ad18ce",
+            "adapter_calls": 1,
+            "prompt_tokens": 913,
+            "native_fallbacks": 0,
+            "completion_tokens": 687,
+            "transport_attempts": 1
+          },
+          "accepted": true,
+          "attempts": 1,
+          "problems": [],
+          "model_cited": [
+            "shipping-v1-clause-1",
+            "shipping-v1-clause-2"
+          ],
+          "model_outcome": "in_transit_on_schedule"
+        },
+        "final_state": "ANSWERED",
+        "model_calls": 2,
+        "scenario_id": null,
+        "transitions": [
+          {
+            "to": "AUTHENTICATED",
+            "from": "NEW",
+            "reason": "valid session"
+          },
+          {
+            "to": "INTENT_CLASSIFIED",
+            "from": "AUTHENTICATED",
+            "reason": "intent=order_status"
+          },
+          {
+            "to": "DATA_FETCHED",
+            "from": "INTENT_CLASSIFIED",
+            "reason": "order SIM-2003"
+          },
+          {
+            "to": "POLICY_RETRIEVED",
+            "from": "DATA_FETCHED",
+            "reason": "scoped retrieval complete"
+          },
+          {
+            "to": "DECIDED",
+            "from": "POLICY_RETRIEVED",
+            "reason": "in_transit_on_schedule: WITHIN_DELIVERY_WINDOW"
+          },
+          {
+            "to": "ANSWERED",
+            "from": "DECIDED",
+            "reason": "explanation verified"
+          }
+        ],
+        "prompt_guard": {
+          "error": null,
+          "model": "meta-llama/llama-prompt-guard-2-86m",
+          "score": 0.0004774827684741467,
+          "flagged": false,
+          "available": true,
+          "latency_ms": 265.693100001954
+        },
+        "reply_source": "model",
+        "answer_reason": null,
+        "determination": {
+          "kind": "order_status",
+          "facts": {
+            "as_of": "2026-04-15",
+            "shipped_on": "2026-04-13",
+            "expected_on": "2026-04-22",
+            "delivered_on": null,
+            "order_number": "SIM-2003",
+            "carrier_status": "in_transit",
+            "is_replacement": false,
+            "policy_version": 1,
+            "presumed_lost_on": "2026-04-27",
+            "days_past_expected": 0,
+            "days_until_presumed_lost": 12
+          },
+          "outcome": "in_transit_on_schedule",
+          "decision_id": "445ed06d-e66c-4aa4-9c98-0aec643f2b30",
+          "input_state": {
+            "shipment": {
+              "status": "in_transit",
+              "shipped_on": "2026-04-13",
+              "delivered_on": null,
+              "carrier_expected_on": "2026-04-22",
+              "has_delivery_exception": false
+            },
+            "categories": [
+              "general"
+            ],
+            "order_number": "SIM-2003",
+            "order_status": "shipped",
+            "purchase_date": "2026-04-10",
+            "is_replacement": false
+          },
+          "order_number": "SIM-2003",
+          "reason_codes": [
+            "WITHIN_DELIVERY_WINDOW"
+          ],
+          "policy_versions": {
+            "shipping": 1
+          },
+          "decision_outcome": "informational",
+          "rule_set_version": "order-status-1",
+          "authorizes_action": false,
+          "applied_clause_keys": [
+            "shipping-v1-clause-1",
+            "shipping-v1-clause-2"
+          ],
+          "decisive_clause_keys": [
+            "shipping-v1-clause-1"
+          ],
+          "supporting_clause_keys": [
+            "shipping-v1-clause-2"
+          ]
+        },
+        "handoff_reason": null,
+        "native_fallbacks": 0,
+        "review_requested": false
+      },
+      "created_at": "2026-11-12 00:44:08.035702+00:00"
+    },
+    {
+      "id": "e212c11b-0872-4a0c-a22f-e9fe8df596a0",
+      "conversation_id": "2b94ca95-0dc3-462d-adf2-d7d993ba0ec7",
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "turn_no": 1,
+      "final_state": "ANSWERED",
+      "tool_calls": 7,
+      "model_calls": 2,
+      "trace": {
+        "as_of": "2026-04-15",
+        "scope": {
+          "types": [
+            "shipping"
+          ],
+          "excluded": {
+            "shipping_restrictions": "no restricted-category item with a delivery problem on this order"
+          },
+          "included": {
+            "shipping": "core policy for intent ['order_status']"
+          }
+        },
+        "tools": [
+          {
+            "ms": 3.68,
+            "ok": true,
+            "tool": "get_order"
+          },
+          {
+            "ms": 10.67,
+            "ok": true,
+            "tool": "fetch_shipment"
+          },
+          {
+            "ms": 3.43,
+            "ok": true,
+            "tool": "fetch_events"
+          },
+          {
+            "ms": 3.83,
+            "ok": true,
+            "tool": "fetch_categories"
+          },
+          {
+            "ms": 4.81,
+            "ok": true,
+            "tool": "policy_version"
+          },
+          {
+            "ms": 45.02,
+            "ok": true,
+            "tool": "retrieve_policy"
+          },
+          {
+            "ms": 2.7,
+            "ok": true,
+            "tool": "fetch_clauses"
+          }
+        ],
+        "claims": [
+          "Where is my order SIM-2001?"
+        ],
+        "tokens": {
+          "prompt": 1403,
+          "completion": 679
+        },
+        "degraded": false,
+        "model_ms": 2251.7,
+        "total_ms": 2681.5,
+        "trace_id": "42f325783bb7444587ef4248d4504e83",
+        "retrieval": {
+          "fts": [],
+          "vec": [
+            "shipping-v1-clause-1",
+            "shipping-v1-clause-3",
+            "shipping-v1-clause-2"
+          ],
+          "clauses": [
+            {
+              "key": "shipping-v1-clause-1",
+              "score": 0.016393,
+              "fts_rank": null,
+              "vec_rank": 1
+            },
+            {
+              "key": "shipping-v1-clause-3",
+              "score": 0.016129,
+              "fts_rank": null,
+              "vec_rank": 2
+            },
+            {
+              "key": "shipping-v1-clause-2",
+              "score": 0.015873,
+              "fts_rank": null,
+              "vec_rank": 3
+            }
+          ],
+          "eligible": 3,
+          "incorporated": []
+        },
+        "extraction": {
+          "llm": {
+            "cache": "off",
+            "model_ms": 556.9,
+            "total_ms": 605.7,
+            "llm_trace_id": "b19c602d48b04990af4204432835e023",
+            "adapter_calls": 1,
+            "prompt_tokens": 480,
+            "native_fallbacks": 0,
+            "completion_tokens": 95,
+            "transport_attempts": 1
+          },
+          "intent": "order_status",
+          "attempts": 1,
+          "confidence": 1.0,
+          "order_number": "SIM-2001"
+        },
+        "resolution": {
+          "matched": "SIM-2001",
+          "candidates": [
+            "SIM-2001"
+          ]
+        },
+        "tool_calls": 7,
+        "explanation": {
+          "llm": {
+            "cache": "off",
+            "model_ms": 1694.8,
+            "total_ms": 1717.4,
+            "llm_trace_id": "e268e931d4c949899a4703f31461eaac",
+            "adapter_calls": 1,
+            "prompt_tokens": 923,
+            "native_fallbacks": 0,
+            "completion_tokens": 584,
+            "transport_attempts": 1
+          },
+          "accepted": true,
+          "attempts": 1,
+          "problems": [],
+          "model_cited": [
+            "shipping-v1-clause-1",
+            "shipping-v1-clause-2"
+          ],
+          "model_outcome": "presumed_lost",
+          "commitment_phrases": []
+        },
+        "final_state": "ANSWERED",
+        "model_calls": 2,
+        "scenario_id": null,
+        "transitions": [
+          {
+            "to": "AUTHENTICATED",
+            "from": "NEW",
+            "reason": "valid session"
+          },
+          {
+            "to": "INTENT_CLASSIFIED",
+            "from": "AUTHENTICATED",
+            "reason": "intent=order_status"
+          },
+          {
+            "to": "DATA_FETCHED",
+            "from": "INTENT_CLASSIFIED",
+            "reason": "order SIM-2001"
+          },
+          {
+            "to": "POLICY_RETRIEVED",
+            "from": "DATA_FETCHED",
+            "reason": "scoped retrieval complete"
+          },
+          {
+            "to": "DECIDED",
+            "from": "POLICY_RETRIEVED",
+            "reason": "presumed_lost: PRESUMED_LOST,UNDELIVERED_PAST_PRESUMED_LOST_DATE"
+          },
+          {
+            "to": "ANSWERED",
+            "from": "DECIDED",
+            "reason": "explanation verified"
+          }
+        ],
+        "prompt_guard": {
+          "error": null,
+          "model": "meta-llama/llama-prompt-guard-2-86m",
+          "score": 0.00047214460209943354,
+          "flagged": false,
+          "available": true,
+          "latency_ms": 237.67879999650177
+        },
+        "reply_source": "model",
+        "answer_reason": null,
+        "determination": {
+          "kind": "order_status",
+          "facts": {
+            "as_of": "2026-04-15",
+            "shipped_on": "2026-03-11",
+            "expected_on": "2026-03-20",
+            "delivered_on": null,
+            "order_number": "SIM-2001",
+            "carrier_status": "in_transit",
+            "is_replacement": false,
+            "policy_version": 1,
+            "presumed_lost_on": "2026-03-25",
+            "days_past_expected": 26,
+            "days_until_presumed_lost": 0
+          },
+          "outcome": "presumed_lost",
+          "decision_id": "5f3550e0-8081-43cf-93c0-bc9e0f4ffb7e",
+          "input_state": {
+            "shipment": {
+              "status": "in_transit",
+              "shipped_on": "2026-03-11",
+              "delivered_on": null,
+              "carrier_expected_on": "2026-03-20",
+              "has_delivery_exception": false
+            },
+            "categories": [
+              "general"
+            ],
+            "order_number": "SIM-2001",
+            "order_status": "shipped",
+            "purchase_date": "2026-03-10",
+            "is_replacement": false
+          },
+          "order_number": "SIM-2001",
+          "reason_codes": [
+            "PRESUMED_LOST",
+            "UNDELIVERED_PAST_PRESUMED_LOST_DATE"
+          ],
+          "policy_versions": {
+            "shipping": 1
+          },
+          "decision_outcome": "informational",
+          "rule_set_version": "order-status-1",
+          "authorizes_action": false,
+          "applied_clause_keys": [
+            "shipping-v1-clause-1",
+            "shipping-v1-clause-2"
+          ],
+          "decisive_clause_keys": [
+            "shipping-v1-clause-2"
+          ],
+          "supporting_clause_keys": [
+            "shipping-v1-clause-1"
+          ]
+        },
+        "handoff_reason": null,
+        "native_fallbacks": 0,
+        "review_requested": false
+      },
+      "created_at": "2026-11-12 01:02:40.901713+00:00"
+    }
+  ]
+}

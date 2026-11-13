@@ -1,0 +1,1088 @@
+{
+  "simulated": true,
+  "table": "audit_log",
+  "exported_on": "2026-11-12",
+  "alembic_revision": "0012",
+  "rows": [
+    {
+      "id": 1,
+      "at": "2026-11-12 00:44:08.035702+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "dca9a175-c514-43ed-84a5-a57da81a9134",
+      "before": {
+        "state": "NEW"
+      },
+      "after": {
+        "turn": 1,
+        "state": "AUTHENTICATED",
+        "reason": "valid session"
+      }
+    },
+    {
+      "id": 2,
+      "at": "2026-11-12 00:44:08.035702+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "dca9a175-c514-43ed-84a5-a57da81a9134",
+      "before": {
+        "state": "AUTHENTICATED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "INTENT_CLASSIFIED",
+        "reason": "intent=order_status"
+      }
+    },
+    {
+      "id": 3,
+      "at": "2026-11-12 00:44:08.035702+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "dca9a175-c514-43ed-84a5-a57da81a9134",
+      "before": {
+        "state": "INTENT_CLASSIFIED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "DATA_FETCHED",
+        "reason": "order SIM-2003"
+      }
+    },
+    {
+      "id": 4,
+      "at": "2026-11-12 00:44:08.035702+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "dca9a175-c514-43ed-84a5-a57da81a9134",
+      "before": {
+        "state": "DATA_FETCHED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "POLICY_RETRIEVED",
+        "reason": "scoped retrieval complete"
+      }
+    },
+    {
+      "id": 5,
+      "at": "2026-11-12 00:44:08.035702+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "dca9a175-c514-43ed-84a5-a57da81a9134",
+      "before": {
+        "state": "POLICY_RETRIEVED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "DECIDED",
+        "reason": "in_transit_on_schedule: WITHIN_DELIVERY_WINDOW"
+      }
+    },
+    {
+      "id": 6,
+      "at": "2026-11-12 00:44:08.035702+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "dca9a175-c514-43ed-84a5-a57da81a9134",
+      "before": {
+        "state": "DECIDED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "ANSWERED",
+        "reason": "explanation verified"
+      }
+    },
+    {
+      "id": 7,
+      "at": "2026-11-12 00:44:19.294626+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "98b671cd-78bc-414d-aa01-0845cb7235cc",
+      "before": {
+        "state": "NEW"
+      },
+      "after": {
+        "turn": 1,
+        "state": "AUTHENTICATED",
+        "reason": "valid session"
+      }
+    },
+    {
+      "id": 8,
+      "at": "2026-11-12 00:44:19.294626+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "98b671cd-78bc-414d-aa01-0845cb7235cc",
+      "before": {
+        "state": "AUTHENTICATED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "INTENT_CLASSIFIED",
+        "reason": "intent=order_status"
+      }
+    },
+    {
+      "id": 9,
+      "at": "2026-11-12 00:44:19.294626+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "98b671cd-78bc-414d-aa01-0845cb7235cc",
+      "before": {
+        "state": "INTENT_CLASSIFIED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "DATA_FETCHED",
+        "reason": "order SIM-2002"
+      }
+    },
+    {
+      "id": 10,
+      "at": "2026-11-12 00:44:19.294626+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "98b671cd-78bc-414d-aa01-0845cb7235cc",
+      "before": {
+        "state": "DATA_FETCHED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "POLICY_RETRIEVED",
+        "reason": "scoped retrieval complete"
+      }
+    },
+    {
+      "id": 11,
+      "at": "2026-11-12 00:44:19.294626+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "98b671cd-78bc-414d-aa01-0845cb7235cc",
+      "before": {
+        "state": "POLICY_RETRIEVED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "DECIDED",
+        "reason": "in_transit_on_schedule: WITHIN_DELIVERY_WINDOW,REPLACEMENT_OWN_WINDOW"
+      }
+    },
+    {
+      "id": 12,
+      "at": "2026-11-12 00:44:19.294626+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "98b671cd-78bc-414d-aa01-0845cb7235cc",
+      "before": {
+        "state": "DECIDED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "ANSWERED",
+        "reason": "explanation verified"
+      }
+    },
+    {
+      "id": 13,
+      "at": "2026-11-12 00:44:22.667052+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "62675600-cecb-4328-866d-c28b59c11f83",
+      "before": {
+        "state": "NEW"
+      },
+      "after": {
+        "turn": 1,
+        "state": "AUTHENTICATED",
+        "reason": "valid session"
+      }
+    },
+    {
+      "id": 14,
+      "at": "2026-11-12 00:44:22.667052+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "62675600-cecb-4328-866d-c28b59c11f83",
+      "before": {
+        "state": "AUTHENTICATED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "INTENT_CLASSIFIED",
+        "reason": "intent=order_status"
+      }
+    },
+    {
+      "id": 15,
+      "at": "2026-11-12 00:44:22.667052+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "62675600-cecb-4328-866d-c28b59c11f83",
+      "before": {
+        "state": "INTENT_CLASSIFIED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "DATA_FETCHED",
+        "reason": "order SIM-2001"
+      }
+    },
+    {
+      "id": 16,
+      "at": "2026-11-12 00:44:22.667052+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "62675600-cecb-4328-866d-c28b59c11f83",
+      "before": {
+        "state": "DATA_FETCHED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "POLICY_RETRIEVED",
+        "reason": "scoped retrieval complete"
+      }
+    },
+    {
+      "id": 17,
+      "at": "2026-11-12 00:44:22.667052+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "62675600-cecb-4328-866d-c28b59c11f83",
+      "before": {
+        "state": "POLICY_RETRIEVED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "DECIDED",
+        "reason": "presumed_lost: PRESUMED_LOST,UNDELIVERED_PAST_PRESUMED_LOST_DATE"
+      }
+    },
+    {
+      "id": 18,
+      "at": "2026-11-12 00:44:22.667052+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "62675600-cecb-4328-866d-c28b59c11f83",
+      "before": {
+        "state": "DECIDED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "ANSWERED",
+        "reason": "explanation verified"
+      }
+    },
+    {
+      "id": 19,
+      "at": "2026-11-12 01:02:40.901713+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "2b94ca95-0dc3-462d-adf2-d7d993ba0ec7",
+      "before": {
+        "state": "NEW"
+      },
+      "after": {
+        "turn": 1,
+        "state": "AUTHENTICATED",
+        "reason": "valid session"
+      }
+    },
+    {
+      "id": 20,
+      "at": "2026-11-12 01:02:40.901713+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "2b94ca95-0dc3-462d-adf2-d7d993ba0ec7",
+      "before": {
+        "state": "AUTHENTICATED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "INTENT_CLASSIFIED",
+        "reason": "intent=order_status"
+      }
+    },
+    {
+      "id": 21,
+      "at": "2026-11-12 01:02:40.901713+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "2b94ca95-0dc3-462d-adf2-d7d993ba0ec7",
+      "before": {
+        "state": "INTENT_CLASSIFIED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "DATA_FETCHED",
+        "reason": "order SIM-2001"
+      }
+    },
+    {
+      "id": 22,
+      "at": "2026-11-12 01:02:40.901713+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "2b94ca95-0dc3-462d-adf2-d7d993ba0ec7",
+      "before": {
+        "state": "DATA_FETCHED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "POLICY_RETRIEVED",
+        "reason": "scoped retrieval complete"
+      }
+    },
+    {
+      "id": 23,
+      "at": "2026-11-12 01:02:40.901713+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "2b94ca95-0dc3-462d-adf2-d7d993ba0ec7",
+      "before": {
+        "state": "POLICY_RETRIEVED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "DECIDED",
+        "reason": "presumed_lost: PRESUMED_LOST,UNDELIVERED_PAST_PRESUMED_LOST_DATE"
+      }
+    },
+    {
+      "id": 24,
+      "at": "2026-11-12 01:02:40.901713+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "2b94ca95-0dc3-462d-adf2-d7d993ba0ec7",
+      "before": {
+        "state": "DECIDED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "ANSWERED",
+        "reason": "explanation verified"
+      }
+    },
+    {
+      "id": 25,
+      "at": "2026-11-12 01:02:46.505713+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "e961a0ef-c88d-4858-bdf1-dcb640b222fa",
+      "before": {
+        "state": "NEW"
+      },
+      "after": {
+        "turn": 1,
+        "state": "AUTHENTICATED",
+        "reason": "valid session"
+      }
+    },
+    {
+      "id": 26,
+      "at": "2026-11-12 01:02:46.505713+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "e961a0ef-c88d-4858-bdf1-dcb640b222fa",
+      "before": {
+        "state": "AUTHENTICATED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "INTENT_CLASSIFIED",
+        "reason": "intent=order_status"
+      }
+    },
+    {
+      "id": 27,
+      "at": "2026-11-12 01:02:46.505713+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "e961a0ef-c88d-4858-bdf1-dcb640b222fa",
+      "before": {
+        "state": "INTENT_CLASSIFIED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "DATA_FETCHED",
+        "reason": "order SIM-2001"
+      }
+    },
+    {
+      "id": 28,
+      "at": "2026-11-12 01:02:46.505713+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "e961a0ef-c88d-4858-bdf1-dcb640b222fa",
+      "before": {
+        "state": "DATA_FETCHED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "POLICY_RETRIEVED",
+        "reason": "scoped retrieval complete"
+      }
+    },
+    {
+      "id": 29,
+      "at": "2026-11-12 01:02:46.505713+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "e961a0ef-c88d-4858-bdf1-dcb640b222fa",
+      "before": {
+        "state": "POLICY_RETRIEVED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "DECIDED",
+        "reason": "presumed_lost: PRESUMED_LOST,UNDELIVERED_PAST_PRESUMED_LOST_DATE"
+      }
+    },
+    {
+      "id": 30,
+      "at": "2026-11-12 01:02:46.505713+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "e961a0ef-c88d-4858-bdf1-dcb640b222fa",
+      "before": {
+        "state": "DECIDED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "ANSWERED",
+        "reason": "explanation verified"
+      }
+    },
+    {
+      "id": 31,
+      "at": "2026-11-12 01:02:51.158698+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "be7515aa-d70c-47a0-bf12-cc6f38c0a54f",
+      "before": {
+        "state": "NEW"
+      },
+      "after": {
+        "turn": 1,
+        "state": "AUTHENTICATED",
+        "reason": "valid session"
+      }
+    },
+    {
+      "id": 32,
+      "at": "2026-11-12 01:02:51.158698+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "be7515aa-d70c-47a0-bf12-cc6f38c0a54f",
+      "before": {
+        "state": "AUTHENTICATED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "INTENT_CLASSIFIED",
+        "reason": "intent=order_status"
+      }
+    },
+    {
+      "id": 33,
+      "at": "2026-11-12 01:02:51.158698+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "be7515aa-d70c-47a0-bf12-cc6f38c0a54f",
+      "before": {
+        "state": "INTENT_CLASSIFIED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "DATA_FETCHED",
+        "reason": "order SIM-2001"
+      }
+    },
+    {
+      "id": 34,
+      "at": "2026-11-12 01:02:51.158698+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "be7515aa-d70c-47a0-bf12-cc6f38c0a54f",
+      "before": {
+        "state": "DATA_FETCHED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "POLICY_RETRIEVED",
+        "reason": "scoped retrieval complete"
+      }
+    },
+    {
+      "id": 35,
+      "at": "2026-11-12 01:02:51.158698+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "be7515aa-d70c-47a0-bf12-cc6f38c0a54f",
+      "before": {
+        "state": "POLICY_RETRIEVED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "DECIDED",
+        "reason": "presumed_lost: PRESUMED_LOST,UNDELIVERED_PAST_PRESUMED_LOST_DATE"
+      }
+    },
+    {
+      "id": 36,
+      "at": "2026-11-12 01:02:51.158698+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "be7515aa-d70c-47a0-bf12-cc6f38c0a54f",
+      "before": {
+        "state": "DECIDED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "ANSWERED",
+        "reason": "explanation verified"
+      }
+    },
+    {
+      "id": 37,
+      "at": "2026-11-12 01:04:00.701864+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "c145e8f0-2605-446f-aade-e7217c9b1dad",
+      "before": {
+        "state": "NEW"
+      },
+      "after": {
+        "turn": 1,
+        "state": "AUTHENTICATED",
+        "reason": "valid session"
+      }
+    },
+    {
+      "id": 38,
+      "at": "2026-11-12 01:04:00.701864+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "c145e8f0-2605-446f-aade-e7217c9b1dad",
+      "before": {
+        "state": "AUTHENTICATED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "INTENT_CLASSIFIED",
+        "reason": "intent=order_status"
+      }
+    },
+    {
+      "id": 39,
+      "at": "2026-11-12 01:04:00.701864+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "c145e8f0-2605-446f-aade-e7217c9b1dad",
+      "before": {
+        "state": "INTENT_CLASSIFIED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "DATA_FETCHED",
+        "reason": "order SIM-2003"
+      }
+    },
+    {
+      "id": 40,
+      "at": "2026-11-12 01:04:00.701864+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "c145e8f0-2605-446f-aade-e7217c9b1dad",
+      "before": {
+        "state": "DATA_FETCHED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "POLICY_RETRIEVED",
+        "reason": "scoped retrieval complete"
+      }
+    },
+    {
+      "id": 41,
+      "at": "2026-11-12 01:04:00.701864+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "c145e8f0-2605-446f-aade-e7217c9b1dad",
+      "before": {
+        "state": "POLICY_RETRIEVED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "DECIDED",
+        "reason": "in_transit_on_schedule: WITHIN_DELIVERY_WINDOW"
+      }
+    },
+    {
+      "id": 42,
+      "at": "2026-11-12 01:04:00.701864+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "c145e8f0-2605-446f-aade-e7217c9b1dad",
+      "before": {
+        "state": "DECIDED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "ANSWERED",
+        "reason": "explanation verified"
+      }
+    },
+    {
+      "id": 43,
+      "at": "2026-11-12 01:04:02.568033+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "d14a8454-3054-418d-b775-1da8dd68f410",
+      "before": {
+        "state": "NEW"
+      },
+      "after": {
+        "turn": 1,
+        "state": "AUTHENTICATED",
+        "reason": "valid session"
+      }
+    },
+    {
+      "id": 44,
+      "at": "2026-11-12 01:04:02.568033+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "d14a8454-3054-418d-b775-1da8dd68f410",
+      "before": {
+        "state": "AUTHENTICATED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "INTENT_CLASSIFIED",
+        "reason": "intent=order_status"
+      }
+    },
+    {
+      "id": 45,
+      "at": "2026-11-12 01:04:02.568033+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "d14a8454-3054-418d-b775-1da8dd68f410",
+      "before": {
+        "state": "INTENT_CLASSIFIED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "DATA_FETCHED",
+        "reason": "order SIM-2002"
+      }
+    },
+    {
+      "id": 46,
+      "at": "2026-11-12 01:04:02.568033+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "d14a8454-3054-418d-b775-1da8dd68f410",
+      "before": {
+        "state": "DATA_FETCHED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "POLICY_RETRIEVED",
+        "reason": "scoped retrieval complete"
+      }
+    },
+    {
+      "id": 47,
+      "at": "2026-11-12 01:04:02.568033+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "d14a8454-3054-418d-b775-1da8dd68f410",
+      "before": {
+        "state": "POLICY_RETRIEVED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "DECIDED",
+        "reason": "in_transit_on_schedule: WITHIN_DELIVERY_WINDOW,REPLACEMENT_OWN_WINDOW"
+      }
+    },
+    {
+      "id": 48,
+      "at": "2026-11-12 01:04:02.568033+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "d14a8454-3054-418d-b775-1da8dd68f410",
+      "before": {
+        "state": "DECIDED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "ANSWERED",
+        "reason": "explanation verified"
+      }
+    },
+    {
+      "id": 49,
+      "at": "2026-11-12 01:04:04.034913+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "60a969ba-f081-430b-9645-8a68adf2d9c1",
+      "before": {
+        "state": "NEW"
+      },
+      "after": {
+        "turn": 1,
+        "state": "AUTHENTICATED",
+        "reason": "valid session"
+      }
+    },
+    {
+      "id": 50,
+      "at": "2026-11-12 01:04:04.034913+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "60a969ba-f081-430b-9645-8a68adf2d9c1",
+      "before": {
+        "state": "AUTHENTICATED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "INTENT_CLASSIFIED",
+        "reason": "intent=order_status"
+      }
+    },
+    {
+      "id": 51,
+      "at": "2026-11-12 01:04:04.034913+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "60a969ba-f081-430b-9645-8a68adf2d9c1",
+      "before": {
+        "state": "INTENT_CLASSIFIED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "DATA_FETCHED",
+        "reason": "order SIM-2001"
+      }
+    },
+    {
+      "id": 52,
+      "at": "2026-11-12 01:04:04.034913+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "60a969ba-f081-430b-9645-8a68adf2d9c1",
+      "before": {
+        "state": "DATA_FETCHED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "POLICY_RETRIEVED",
+        "reason": "scoped retrieval complete"
+      }
+    },
+    {
+      "id": 53,
+      "at": "2026-11-12 01:04:04.034913+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "60a969ba-f081-430b-9645-8a68adf2d9c1",
+      "before": {
+        "state": "POLICY_RETRIEVED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "DECIDED",
+        "reason": "presumed_lost: PRESUMED_LOST,UNDELIVERED_PAST_PRESUMED_LOST_DATE"
+      }
+    },
+    {
+      "id": 54,
+      "at": "2026-11-12 01:04:04.034913+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "60a969ba-f081-430b-9645-8a68adf2d9c1",
+      "before": {
+        "state": "DECIDED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "ANSWERED",
+        "reason": "explanation verified"
+      }
+    },
+    {
+      "id": 55,
+      "at": "2026-11-12 01:04:05.653665+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "760d3e6d-b6ad-43da-8c34-fe0d2225e7d3",
+      "before": {
+        "state": "NEW"
+      },
+      "after": {
+        "turn": 1,
+        "state": "AUTHENTICATED",
+        "reason": "valid session"
+      }
+    },
+    {
+      "id": 56,
+      "at": "2026-11-12 01:04:05.653665+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "760d3e6d-b6ad-43da-8c34-fe0d2225e7d3",
+      "before": {
+        "state": "AUTHENTICATED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "INTENT_CLASSIFIED",
+        "reason": "intent=order_status"
+      }
+    },
+    {
+      "id": 57,
+      "at": "2026-11-12 01:04:05.653665+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "760d3e6d-b6ad-43da-8c34-fe0d2225e7d3",
+      "before": {
+        "state": "INTENT_CLASSIFIED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "DATA_FETCHED",
+        "reason": "order SIM-2001"
+      }
+    },
+    {
+      "id": 58,
+      "at": "2026-11-12 01:04:05.653665+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "760d3e6d-b6ad-43da-8c34-fe0d2225e7d3",
+      "before": {
+        "state": "DATA_FETCHED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "POLICY_RETRIEVED",
+        "reason": "scoped retrieval complete"
+      }
+    },
+    {
+      "id": 59,
+      "at": "2026-11-12 01:04:05.653665+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "760d3e6d-b6ad-43da-8c34-fe0d2225e7d3",
+      "before": {
+        "state": "POLICY_RETRIEVED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "DECIDED",
+        "reason": "presumed_lost: PRESUMED_LOST,UNDELIVERED_PAST_PRESUMED_LOST_DATE"
+      }
+    },
+    {
+      "id": 60,
+      "at": "2026-11-12 01:04:05.653665+00:00",
+      "actor_type": "system",
+      "actor_id": null,
+      "customer_id": "7abac9cb-35a1-59a9-9ef2-4c4f05dcb9b3",
+      "event": "state_transition",
+      "entity_type": "conversation",
+      "entity_id": "760d3e6d-b6ad-43da-8c34-fe0d2225e7d3",
+      "before": {
+        "state": "DECIDED"
+      },
+      "after": {
+        "turn": 1,
+        "state": "ANSWERED",
+        "reason": "explanation verified"
+      }
+    }
+  ]
+}

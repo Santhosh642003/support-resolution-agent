@@ -1,0 +1,48 @@
+{
+  "simulated": true,
+  "table": "decision_policies",
+  "exported_on": "2026-11-12",
+  "alembic_revision": "0012",
+  "rows": [
+    {
+      "decision_id": "098ee26e-0c22-4bc1-868d-2649c0fa6c83",
+      "policy_document_id": "85039671-6c8c-4b49-b734-84592f33af29"
+    },
+    {
+      "decision_id": "1ff9ead5-737a-4394-b202-2a2db3ab9c19",
+      "policy_document_id": "85039671-6c8c-4b49-b734-84592f33af29"
+    },
+    {
+      "decision_id": "418d9609-0202-44a3-b38b-eef42a466953",
+      "policy_document_id": "85039671-6c8c-4b49-b734-84592f33af29"
+    },
+    {
+      "decision_id": "445ed06d-e66c-4aa4-9c98-0aec643f2b30",
+      "policy_document_id": "85039671-6c8c-4b49-b734-84592f33af29"
+    },
+    {
+      "decision_id": "4ce2bc50-9420-4dee-b140-998bf1c82fae",
+      "policy_document_id": "85039671-6c8c-4b49-b734-84592f33af29"
+    },
+    {
+      "decision_id": "5f3550e0-8081-43cf-93c0-bc9e0f4ffb7e",
+      "policy_document_id": "85039671-6c8c-4b49-b734-84592f33af29"
+    },
+    {
+      "decision_id": "833d1ebd-214f-44fc-9186-c8bdce26aec6",
+      "policy_document_id": "85039671-6c8c-4b49-b734-84592f33af29"
+    },
+    {
+      "decision_id": "98f21be3-87d5-4ff1-8feb-5fcffd095dcd",
+      "policy_document_id": "85039671-6c8c-4b49-b734-84592f33af29"
+    },
+    {
+      "decision_id": "aa73188e-77dd-461f-99f5-3126a71efd4d",
+      "policy_document_id": "85039671-6c8c-4b49-b734-84592f33af29"
+    },
+    {
+      "decision_id": "caee81b7-02fd-4b87-b66b-cc1aeb6c8167",
+      "policy_document_id": "85039671-6c8c-4b49-b734-84592f33af29"
+    }
+  ]
+}

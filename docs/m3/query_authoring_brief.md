@@ -66,4 +66,12 @@ When you are done, please also note (one line, anywhere) whether you looked at a
 
 **P. Order not delivered, and they assert something.** An order shows as shipped but the customer says the courier left a card saying they tried to deliver and nobody was home, and that their neighbour told them it was delivered somewhere else. They want to know what is going on.
 
+**Q. A replacement is on its way, but they want the money too.** The same customer as card A. The company has already sent a replacement box, which went out about a week ago and is showing as on its way. The customer is still annoyed about the first parcel and says they would like their money back for it as well, since they have waited so long.
+
+**R. The delivery fee.** A customer paid for delivery on a box ordered about three weeks ago. Nothing has ever turned up and the tracking has been stuck for about two weeks. They are not asking for a replacement, only to be paid back, and they want to know whether the delivery charge is included or whether they only get back the price of the box.
+
+**S. Sending it all back, what about the delivery charge?** A customer received their whole order a week ago, in good condition, and has decided they do not want any of it. They paid for delivery and want to know whether that comes back as well.
+
+**T. The replacement went missing as well.** The same customer as card A. The company sent a replacement about three weeks ago, and that has not turned up either. The customer wants their money back for the original order and asks whether anything has changed now that the second parcel is also missing.
+
 Thank you. The cards are intentionally everyday: please do not try to make them sound like a policy.
