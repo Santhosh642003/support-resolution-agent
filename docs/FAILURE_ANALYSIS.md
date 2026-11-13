@@ -95,3 +95,29 @@ A running log of real defects found during development, each with the test or ch
 - **Rule going forward:** every view over a protected table is `security_invoker`, and a correctness check is itself tested by feeding it a violation (the drift tests do). Adding RLS to a table changes what every view, function and report that reads it can see; list them when you add the policy.
 - **Class of bug:** one control silently defeating another; a checker that fails open.
 
+
+## F-011: a CHECK constraint let a half-filled pair through (NULL is not a violation)
+
+- **Found:** 2026-11-12, migration 0014 (box item counts), by a failing test written before the migration was trusted.
+- **Test:** `backend/tests/db/test_shipping_line.py::test_box_item_counts_are_both_or_neither_and_coherent`. `UPDATE order_items SET items_total = 3` (no `items_shipped`) succeeded.
+- **Cause:** the constraint read `(total IS NULL AND shipped IS NULL) OR (total > 0 AND shipped >= 0 AND shipped <= total)`. With `shipped` NULL the second branch evaluates to NULL, and a CHECK passes on NULL. The "both or neither" rule was not enforced at all for the half-filled case.
+- **Fix:** the second branch states `IS NOT NULL` for both columns explicitly. The engine's own input validation (`RefundItem`) already refused the half-filled pair, so the rule held in Python and not in the database, which is exactly the placement CLAUDE.md says not to leave silently.
+- **Class of bug:** three-valued logic in a guard; a constraint that looks complete and has a hole where a column is NULL.
+
+## F-012: the refund ceiling was per request, so a customer could clear it by asking twice
+
+- **Found:** in the engine's ambiguity review (task 1, SPEC 18.4 item 3); decided and fixed 2026-11-12 under the PM's ruling (SPEC 18.6). Entered here with the test that now exposes the old behaviour.
+- **Test:** `backend/tests/unit/test_refund_amendments.py::test_adversarial_family_7_refund_splitting_two_requests_each_below_the_ceiling` (both policy versions). Before the fix two 7000 refunds on one order each passed under the v1 ceiling of 7500 (14000 in total) and the paid-amount invariant did not stop it, because 14000 is within what was paid.
+- **Cause:** the ceiling compared the request's own aggregate; "above that, human review" did not say whether prior refunds count, and the engine took the literal reading.
+- **Fix:** the ceiling is cumulative per order (prior refunds included), in the policy text and in the rule; the mutation "cumulative ceiling disabled" is caught by the splitting test and the boundary tests.
+- **Class of bug:** a limit that can be defeated by repetition; an authorization threshold with no memory.
+
+## F-013: amending the policy corpus silently invalidated the recorded retrieval measurements
+
+- **Found:** 2026-11-12, by the database test run after the policy amendments (12 failures; five of them in the retrieval measurement tests).
+- **Tests:** `tests/db/test_retrieval_recall.py::test_the_recorded_recall_numbers_reproduce_exactly`, `tests/db/test_retrieval_recall_v2.py::test_the_recorded_round_2_numbers_reproduce_exactly`, `tests/db/test_hybrid_retrieval.py` (the dev-set curve and the per-case top-k test).
+- **What happened:** two clauses were added and five reworded, so every embedding and ranking number in SPEC 7.1 to 7.3 changed. The dev set went from 16 of 16 to 15 of 16 at k=7; re-running the pre-registered k rule would now pick k=10 where before it picked nothing. None of that is a change in the system's retrieval quality, only in the text being retrieved.
+- **A near miss in the same change, caught by reading the spec rather than by a test:** the first residual clause linked v1 clause 1 (the presumed-lost anchor) as instructed, which would have surfaced v1's superseded 30 days for a v2 purchase, against the standing rule of SPEC 7.2 that an incorporation link must never surface superseded text. The anchor is now stated in v2 clause 1 instead (SPEC 18.6).
+- **Fix:** the historical measurements are left exactly as recorded and their reproduction tests read a frozen copy of the corpus as it was measured (`backend/tests/fixtures/policies_as_measured/`); the effect of the amendments is pinned on the current corpus in `test_the_2026_11_12_amendments_cost_the_dev_set_one_needed_clause_at_k7`. `retrieval_k` was not changed.
+- **Rule going forward:** a recorded measurement is a function of the corpus it was taken on; the reproduction test names that corpus. A policy edit is not free for the evaluation, and the evaluation numbers are not to be cited across it.
+- **Class of bug:** an implicit dependency of a recorded result on mutable input data.
