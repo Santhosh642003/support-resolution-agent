@@ -17,6 +17,7 @@ from app.domain.rules.refund import (
     RefundItem,
     RefundOrder,
     RefundOutcome,
+    RefundReplacement,
     RefundShipment,
     decide_refund,
     select_policy_version,
@@ -53,8 +54,25 @@ def items(draw: st.DrawFn) -> RefundItem:
         final_sale=draw(st.booleans()),
         digital_addon=digital,
         digital_accessed_on=draw(st.none() | days) if digital else None,
-        box_items_total=total,
-        box_items_shipped=None if total is None else draw(st.integers(0, total)),
+        items_total=total,
+        items_shipped=None if total is None else draw(st.integers(0, total)),
+    )
+
+
+@st.composite
+def shipping_lines(draw: st.DrawFn) -> RefundItem:
+    paid = draw(st.integers(1, 2000))
+    return RefundItem(
+        "ship", "SHIPPING", "shipping", paid, draw(st.integers(0, paid)), line_type="shipping"
+    )
+
+
+@st.composite
+def replacements(draw: st.DrawFn) -> RefundReplacement:
+    return RefundReplacement(
+        "R-1",
+        draw(st.sampled_from(["placed", "shipped", "delivered", "canceled"])),
+        draw(shipments()),
     )
 
 
@@ -77,6 +95,8 @@ def shipments(draw: st.DrawFn) -> RefundShipment | None:
 @st.composite
 def orders(draw: st.DrawFn) -> RefundOrder:
     its = tuple(draw(st.lists(items(), min_size=0, max_size=5)))
+    if draw(st.booleans()):  # shipping is an order line (migration 0014)
+        its += (draw(shipping_lines()),)
     # The order's own paid total is NOT tied to the sum of its lines: a mismatched record is exactly
     # what the invariant must survive.
     paid = draw(cents)
@@ -92,7 +112,7 @@ def orders(draw: st.DrawFn) -> RefundOrder:
         shipping_cents=draw(st.integers(0, 2000)),
         paid_cents=paid,
         refunded_total_cents=draw(st.integers(0, paid)),
-        has_replacement=draw(st.booleans()),
+        replacements=tuple(draw(st.lists(replacements(), max_size=2))),
     )
 
 
@@ -138,7 +158,9 @@ def test_the_aggregate_is_the_sum_of_the_lines_and_only_an_allowed_decision_auth
     if d.outcome is RefundOutcome.ALLOWED:
         terms = select_policy_version(order.purchase_date)
         assert terms is not None and d.authorized_cents == d.aggregate_cents
-        assert 0 < d.aggregate_cents <= terms.ceiling_cents  # auto-approval never exceeds it
+        assert 0 < d.aggregate_cents
+        # The ceiling is CUMULATIVE per order: prior refunds count (SPEC 18.6).
+        assert order.refunded_total_cents + d.aggregate_cents <= terms.ceiling_cents
     else:
         assert d.authorized_cents == 0
 
@@ -158,6 +180,9 @@ def test_citations_are_real_clauses_decisive_is_a_subset_and_the_version_follows
     for k in keys:
         if k.startswith("refund-v"):
             assert k.startswith(f"refund-v{d.policy_version}-")  # never a clause of another version
+    for c in d.applied:  # a residual clause names the earlier-version clauses it carries forward
+        assert set(c.incorporating) <= CORPUS_KEYS
+        assert not c.incorporating or c.key.startswith("refund-v2-")
     if d.outcome is RefundOutcome.ALLOWED:
         assert d.decisive_clause_keys  # an allowance always rests on a cited clause
     if d.handoff is not None:
@@ -203,8 +228,9 @@ def test_repeated_refunds_cannot_cumulatively_exceed_the_amount_paid(
                 i.final_sale,
                 i.digital_addon,
                 i.digital_accessed_on,
-                i.box_items_total,
-                i.box_items_shipped,
+                i.items_total,
+                i.items_shipped,
+                i.line_type,
             )  # fmt: skip
             for i, line in zip(cur.items, d.lines, strict=True)
         )
@@ -244,3 +270,29 @@ def test_the_generator_reaches_every_outcome_and_both_versions() -> None:
             ),
             settings=settings(max_examples=3000, derandomize=True, deadline=None),
         )
+
+
+@given(orders(), TODAYS)
+@SETTINGS
+def test_a_replacement_that_is_not_itself_lost_blocks_a_refund_of_the_original_shipment(
+    order: RefundOrder, today: date
+) -> None:
+    """Shipping v1 clause 4: while any replacement is the remedy, an undelivered original is never
+    allowed or escalated into an allowance; it is denied with REPLACEMENT_IS_REMEDY."""
+    d = decide_refund(order, today)
+    if d.outcome is RefundOutcome.ALLOWED and order.shipment is not None:
+        if order.shipment.delivered_on is None:  # the lost / exception paths
+            from app.domain.rules.refund import _replacement_presumed_lost
+
+            assert all(_replacement_presumed_lost(r, today) for r in order.replacements)
+
+
+@given(orders(), TODAYS)
+@SETTINGS
+def test_shipping_is_refunded_only_when_the_whole_shipment_is_undelivered(
+    order: RefundOrder, today: date
+) -> None:
+    d = decide_refund(order, today)
+    for item, line in zip(order.items, d.lines, strict=True):
+        if item.line_type == "shipping" and line.amount_cents > 0:
+            assert order.shipment is not None and order.shipment.delivered_on is None

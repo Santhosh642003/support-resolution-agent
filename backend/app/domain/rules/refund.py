@@ -18,16 +18,24 @@ Evaluation order (first match ends it):
   1  version selected by purchase date           none in effect -> needs_human
   2  subscription charge / canceled order        routed away / denied
   3  window anchor: delivered, lost, exception   undelivered restricted categories -> needs_human
+  3b replacement already sent (lost/exception)   a replacement not itself lost -> denied
   4  window                                      outside -> denied
-  5  per-line eligibility (final_sale, accessed digital add-on, proration), from the amount PAID
+  5  per-line eligibility (final_sale, accessed digital add-on, proration, shipping line)
   6  the paid-amount INVARIANT clamp             a system rule, never a policy clause
-  7  aggregate, then the auto-approve ceiling    above it -> needs_human (human review, NOT denial)
+  7  aggregate, then the CUMULATIVE ceiling       above it -> needs_human (human review, NOT denial)
 Claims are evaluated last and can only ESCALATE (see "Claims").
 
 Per-line amounts come from `paid_cents` of the line (already net of the discount allocation) and
-proration is applied to THAT: discount first, then proration (SPEC 16.2). Shipping is never
-refundable: refund lines are per item, and a header must equal the sum of its lines (the drift
-views). Integer cents throughout; proration rounds DOWN, so it can never exceed what was paid.
+proration is applied to THAT: discount first, then proration (SPEC 16.2). Shipping is an order line
+with a type flag (migration 0014), so the invariant, the per-line cap and the aggregate apply to it
+unchanged; it is refundable only when the ENTIRE shipment is lost or undelivered, never in a partial
+or item-level refund where other items arrived (refund v1 clause 2). Integer cents throughout;
+proration rounds UP in the customer's favour and is capped by the line's paid amount (SPEC 18.6).
+
+The ceiling is CUMULATIVE per order: prior refunds count (SPEC 18.6), so two requests each below it
+cannot sum past it without a human. A replacement already sent for a presumed-lost shipment is the
+remedy: the original is refundable only if every replacement is itself presumed lost (shipping v1
+clause 4); otherwise DENIED with REPLACEMENT_IS_REMEDY, not a handoff.
 
 Two paid-amount mechanisms, kept visibly separate:
   * POLICY: refund v2 clause 4 ("the amount actually paid, never list price") is applied and cited
@@ -50,9 +58,13 @@ threshold that was not reached). Concretely:
                 exclusions that zeroed every line). The rest is supporting.
 The explanation must cite every decisive clause.
 
-Where policy v2 is silent (it states no lost-shipment refund and no proration; both are in v1), the
-rule is CARRIED FORWARD, reason RULE_CARRIED_FORWARD_FROM_V1, and no v2 clause is cited for it,
-because none exists. That is an interpretation, reported in SPEC 18, not a silent one.
+Refund v2 clause 6 is a RESIDUAL clause: "except as modified by this version, v1 remains in effect",
+with incorporation links to the v1 clauses carried forward (lost shipments and the shipping charge,
+proration). The presumed-lost ANCHOR is not linked: v1 clause 1 states a superseded 30 days, and a
+link must never surface superseded text (SPEC 7.2), so v2 clause 1 states the anchor itself. The
+carried-forward rules are cited as "Refund Policy v2 clause 6, incorporating v1 clause N"
+(AppliedClause.incorporating), reason RULE_CARRIED_FORWARD_FROM_V1. Every applied rule therefore has
+a citable clause under both versions (SPEC 18.6, drafting correction).
 
 Claims. A `Claim` is a structured assertion of a fact the rules read and the records contradict. It
 is never evidence for a grant. The engine re-evaluates assuming the claim TRUE; if the decision
@@ -103,9 +115,13 @@ class RefundTerms:
     ceiling: int
     digital: int
     final_sale: int
-    lost: int | None  # None: this version states no lost-shipment rule (carried forward from v1)
-    proration: int | None  # None: this version states no proration rule (carried forward from v1)
+    lost: int  # carries the lost-shipment refund (v2: the residual clause 6)
+    proration: int  # carries proration (v2: the residual clause 6)
     exception: int | None
+    # The earlier-version clauses a residual clause incorporates for each carried-forward rule;
+    # empty when the version states the rule itself. A test asserts them against the stored text.
+    lost_via: tuple[str, ...] = ()
+    proration_via: tuple[str, ...] = ()
 
 
 TERMS: tuple[RefundTerms, ...] = (
@@ -137,9 +153,11 @@ TERMS: tuple[RefundTerms, ...] = (
         ceiling=2,
         digital=5,
         final_sale=5,
-        lost=None,
-        proration=None,
+        lost=6,
+        proration=6,
         exception=3,
+        lost_via=("refund-v1-clause-2",),  # the refund and the shipping charge
+        proration_via=("refund-v1-clause-4",),
     ),
 )
 
@@ -177,18 +195,25 @@ class RefundItem:
     digital_addon: bool = False
     digital_accessed_on: date | None = None
     # Subscription box proration (refund v1 clause 4): items in the box, items shipped so far.
-    box_items_total: int | None = None
-    box_items_shipped: int | None = None
+    items_total: int | None = None
+    items_shipped: int | None = None
+    line_type: str = "item"  # item | shipping (migration 0014): shipping is an order line
 
     def __post_init__(self) -> None:
         if self.paid_cents < 0 or self.refunded_cents < 0 or self.refunded_cents > self.paid_cents:
             raise ValueError(f"item {self.item_id}: need 0 <= refunded <= paid")
-        if (self.box_items_total is None) != (self.box_items_shipped is None):
-            raise ValueError("box_items_total and box_items_shipped go together")
-        if self.box_items_total is not None and not (
-            self.box_items_total > 0 and 0 <= (self.box_items_shipped or 0) <= self.box_items_total
+        if self.line_type not in ("item", "shipping"):
+            raise ValueError(f"item {self.item_id}: line_type must be item or shipping")
+        if (self.items_total is None) != (self.items_shipped is None):
+            raise ValueError("items_total and items_shipped go together")
+        if self.items_total is not None and not (
+            self.items_total > 0 and 0 <= (self.items_shipped or 0) <= self.items_total
         ):
             raise ValueError(f"item {self.item_id}: need 0 <= shipped <= total, total > 0")
+        if self.line_type == "shipping" and (
+            self.final_sale or self.digital_addon or self.items_total is not None
+        ):
+            raise ValueError(f"item {self.item_id}: a shipping line is plain (no flags, no box)")
 
 
 @dataclass(frozen=True)
@@ -197,6 +222,16 @@ class RefundShipment:
     shipped_on: date | None
     delivered_on: date | None
     has_delivery_exception: bool = False
+
+
+@dataclass(frozen=True)
+class RefundReplacement:
+    """A replacement order sent for this order (orders.replacement_for_order_id). It has its OWN
+    shipment and its own presumed-lost window (shipping v1 clause 3)."""
+
+    order_number: str
+    status: str  # placed | shipped | delivered | canceled
+    shipment: RefundShipment | None
 
 
 @dataclass(frozen=True)
@@ -212,7 +247,7 @@ class RefundOrder:
     shipping_cents: int = 0
     paid_cents: int = 0
     refunded_total_cents: int = 0
-    has_replacement: bool = False  # a replacement shipment was already sent for this order
+    replacements: tuple[RefundReplacement, ...] = ()  # replacements sent for this order
 
     def __post_init__(self) -> None:
         if (
@@ -247,6 +282,9 @@ class LineDecision:
 class AppliedClause:
     key: str  # chunk key, e.g. refund-v2-clause-1; these ARE the citations (SPEC 10.4)
     decisive: bool
+    # Set when the clause is a residual clause applied through the earlier-version clauses it
+    # incorporates: "Refund Policy v2 clause 6, incorporating v1 clause 2". Not part of the key set.
+    incorporating: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -301,10 +339,13 @@ class _Clauses:
 
     def __init__(self) -> None:
         self._roles: dict[str, bool] = {}
+        self._via: dict[str, list[str]] = {}
 
-    def add(self, key: str | None, decisive: bool) -> None:
+    def add(self, key: str | None, decisive: bool, via: Sequence[str] = ()) -> None:
         if key is not None:
             self._roles[key] = self._roles.get(key, False) or decisive
+            known = self._via.setdefault(key, [])
+            known.extend(v for v in via if v not in known)
 
     def only_decisive(self, keys: set[str | None]) -> None:
         """Demote every applied clause not in `keys` to supporting (and promote those in it)."""
@@ -312,7 +353,9 @@ class _Clauses:
             self._roles[k] = k in keys
 
     def result(self) -> tuple[AppliedClause, ...]:
-        return tuple(AppliedClause(k, d) for k, d in self._roles.items())
+        return tuple(
+            AppliedClause(k, d, tuple(self._via.get(k, ()))) for k, d in self._roles.items()
+        )
 
 
 def _refund_key(terms: RefundTerms, number: int | None) -> str | None:
@@ -346,7 +389,9 @@ def decide_refund(order: RefundOrder, today: date, claims: Sequence[Claim] = ())
                 RefundOutcome.NEEDS_HUMAN,
                 tuple(replace(line, amount_cents=0) for line in base.lines),
                 (R.UNVERIFIABLE_CLAIM,),
-                tuple(AppliedClause(c.key, False) for c in base.applied),  # supporting only
+                tuple(
+                    AppliedClause(c.key, False, c.incorporating) for c in base.applied
+                ),  # supporting only
                 base.policy_version,
                 {**base.facts, "claims_recorded": len(recorded)},
                 Handoff(R.UNVERIFIABLE_CLAIM, evidence),
@@ -477,9 +522,9 @@ def _evaluate(order: RefundOrder, today: date) -> RefundDecision:
         if ship.status == "lost" or today >= lost_on:
             path = "lost"
             clauses.add(presumed_lost_key, True)
-            clauses.add(_refund_key(terms, terms.lost), True)
+            clauses.add(_refund_key(terms, terms.lost), True, terms.lost_via)
             reasons.append(R.LOST_SHIPMENT_FULL_REFUND)
-            if terms.lost is None:
+            if terms.lost_via:
                 reasons.append(R.RULE_CARRIED_FORWARD_FROM_V1)
         elif exception and terms.exception_refund:
             path = "exception"
@@ -489,13 +534,34 @@ def _evaluate(order: RefundOrder, today: date) -> RefundDecision:
         else:
             facts["eligible_from"] = lost_on.isoformat()
             clauses.add(presumed_lost_key, True)
-            clauses.add(_refund_key(terms, terms.lost), True)
+            clauses.add(_refund_key(terms, terms.lost), True, terms.lost_via)
             if exception:  # v1 has no exception clause: it does not shorten the wait
                 reasons.append(R.CARRIER_DELIVERY_EXCEPTION)
             return _result(
                 RefundOutcome.DENIED, [R.NOT_YET_REFUNDABLE, *reasons, R.NOT_YET_PRESUMED_LOST],
                 clauses, facts, v, zero,
             )  # fmt: skip
+    # ---- a replacement already sent is the remedy (shipping v1 clause 4) ---------------------
+    if path in ("lost", "exception"):
+        remedy = [r for r in order.replacements if not _replacement_presumed_lost(r, today)]
+        if remedy:
+            first = remedy[0]
+            facts["replacement_order"] = first.order_number
+            facts["replacement_status"] = first.status
+            rep_ship = first.shipment
+            if rep_ship is not None and rep_ship.shipped_on is not None:
+                facts["replacement_shipped_on"] = rep_ship.shipped_on.isoformat()
+                facts["replacement_presumed_lost_on"] = presumed_lost_date(
+                    rep_ship.shipped_on
+                ).isoformat()
+            remedy_key = chunk_key("shipping", SHIPPING_POLICY_VERSION, 4)
+            clauses.add(remedy_key, True)
+            clauses.add(chunk_key("shipping", SHIPPING_POLICY_VERSION, 3), False)
+            clauses.only_decisive({remedy_key})
+            return _result(RefundOutcome.DENIED, [R.REPLACEMENT_IS_REMEDY], clauses, facts, v, zero)
+        if order.replacements:  # every replacement was itself lost: the original is refundable
+            reasons.append(R.REPLACEMENT_ALSO_LOST)
+            clauses.add(chunk_key("shipping", SHIPPING_POLICY_VERSION, 4), True)
     facts["window_anchor"] = anchor.isoformat()
     facts["anchor_basis"] = "delivery" if path == "delivered" else "presumed_lost"
     days = (today - anchor).days  # negative while the window has not started (exception path)
@@ -512,11 +578,20 @@ def _evaluate(order: RefundOrder, today: date) -> RefundDecision:
 
     # ---- per-line eligibility, from the amount actually paid ---------------------------------
     lines: list[LineDecision] = []
-    fired_final = fired_digital = fired_proration = False
+    fired_final = fired_digital = fired_proration = fired_shipping = False
+    entire_shipment_lost = path in ("lost", "exception")
     for item in order.items:
         line_reasons: list[R] = []
         remaining = item.paid_cents - item.refunded_cents
-        if item.final_sale:
+        if item.line_type == "shipping":
+            if entire_shipment_lost:  # the delivery fee for a delivery that never happened
+                amount = remaining
+                line_reasons.append(R.SHIPPING_CHARGE_REFUNDED)
+            else:  # other items arrived: never refunded on a partial or item-level refund
+                amount = 0
+                fired_shipping = item.paid_cents > 0
+                line_reasons.append(R.SHIPPING_NOT_REFUNDABLE)
+        elif item.final_sale:
             amount = 0
             fired_final = True
             line_reasons.append(R.FINAL_SALE_EXCLUDED)
@@ -528,11 +603,12 @@ def _evaluate(order: RefundOrder, today: date) -> RefundDecision:
             eligible = item.paid_cents  # discount is already inside paid_cents: discount FIRST
             if (
                 path == "delivered"
-                and item.box_items_total is not None
-                and item.box_items_shipped is not None
-            ):  # ... then proration, rounded down
-                eligible = item.paid_cents * (item.box_items_total - item.box_items_shipped)
-                eligible //= item.box_items_total
+                and item.items_total is not None
+                and item.items_shipped is not None
+            ):  # ... then proration of the UNSHIPPED share, rounded UP, capped at the amount paid
+                unshipped = item.items_total - item.items_shipped
+                eligible = -(-item.paid_cents * unshipped // item.items_total)  # ceiling division
+                eligible = min(eligible, item.paid_cents)
                 fired_proration = True
                 line_reasons.append(R.PRORATED_BY_ITEMS_SHIPPED)
             amount = max(0, min(eligible - item.refunded_cents, remaining))
@@ -552,10 +628,16 @@ def _evaluate(order: RefundOrder, today: date) -> RefundDecision:
         clauses.add(_refund_key(terms, terms.final_sale), True)
     if fired_digital:
         clauses.add(_refund_key(terms, terms.digital), True)
+    shipping_refunded = entire_shipment_lost and any(
+        i.line_type == "shipping" and i.paid_cents > 0 for i in order.items
+    )
+    if fired_shipping or shipping_refunded:  # the clause that decided what became of the fee
+        clauses.add(_refund_key(terms, terms.lost), True, terms.lost_via[:1])
+        reasons.append(R.SHIPPING_NOT_REFUNDABLE if fired_shipping else R.SHIPPING_CHARGE_REFUNDED)
     if fired_proration:
-        clauses.add(_refund_key(terms, terms.proration), True)
+        clauses.add(_refund_key(terms, terms.proration), True, terms.proration_via)
         reasons.append(R.PRORATED_BY_ITEMS_SHIPPED)
-        if terms.proration is None:
+        if terms.proration_via:
             reasons.append(R.RULE_CARRIED_FORWARD_FROM_V1)
     if order.discount_cents > 0:
         if terms.promo_paid_clause is not None:  # v2: the POLICY says so
@@ -563,8 +645,8 @@ def _evaluate(order: RefundOrder, today: date) -> RefundDecision:
             reasons.append(R.PAID_AMOUNT_BASIS_POLICY)
         else:  # v1 is silent: the SYSTEM INVARIANT covers it, and no clause is cited for it
             reasons.append(R.PAID_AMOUNT_BASIS_INVARIANT)
-    if order.has_replacement:
-        reasons.append(R.REPLACEMENT_ALREADY_SENT)  # recorded for the reviewer; not a rule
+    if order.replacements and path == "delivered":
+        reasons.append(R.REPLACEMENT_ALREADY_SENT)  # recorded for the reviewer; not a rule here
 
     amounts, capped = _enforce_paid_invariant(order, [line.amount_cents for line in lines])
     lines = [replace(line, amount_cents=a) for line, a in zip(lines, amounts, strict=True)]
@@ -582,26 +664,48 @@ def _evaluate(order: RefundOrder, today: date) -> RefundDecision:
                 _refund_key(terms, terms.final_sale) if fired_final else None,
                 _refund_key(terms, terms.digital) if fired_digital else None,
                 _refund_key(terms, terms.proration) if fired_proration else None,
+                _refund_key(terms, terms.lost) if fired_shipping else None,
             }
         )
         no_money = [R.NOTHING_REFUNDABLE, *(r for r in reasons if r is not R.REFUND_WITHIN_WINDOW)]
         return _result(RefundOutcome.DENIED, no_money, clauses, facts, v, out_lines)
 
     ceiling_key = _refund_key(terms, terms.ceiling)
-    if aggregate > terms.ceiling_cents:  # above the ceiling: human review, NOT denial
+    prior = order.refunded_total_cents
+    cumulative = prior + aggregate  # the ceiling is CUMULATIVE per order (SPEC 18.6): prior counts
+    facts["prior_refunded_cents"] = prior
+    facts["cumulative_cents"] = cumulative
+    if cumulative > terms.ceiling_cents:  # above the ceiling: human review, NOT denial
         clauses.add(ceiling_key, True)
         clauses.only_decisive({ceiling_key})
+        codes = [R.ABOVE_AUTO_APPROVE_CEILING]
+        if prior > 0 and aggregate <= terms.ceiling_cents:  # the request alone was below it
+            codes.append(R.CUMULATIVE_REFUNDS_ABOVE_CEILING)
         return _result(
-            RefundOutcome.NEEDS_HUMAN, [R.ABOVE_AUTO_APPROVE_CEILING, *reasons], clauses, facts, v,
-            out_lines,
+            RefundOutcome.NEEDS_HUMAN, [*codes, *reasons], clauses, facts, v, out_lines,
             Handoff(R.ABOVE_AUTO_APPROVE_CEILING, {
                 "reason_code": R.ABOVE_AUTO_APPROVE_CEILING.value,
-                "proposed_cents": aggregate, "ceiling_cents": terms.ceiling_cents,
+                "proposed_cents": aggregate, "prior_refunded_cents": prior,
+                "cumulative_cents": cumulative, "ceiling_cents": terms.ceiling_cents,
                 "facts": dict(facts),
             }),
         )  # fmt: skip
     clauses.add(ceiling_key, False)  # checked, not binding
     return _result(RefundOutcome.ALLOWED, reasons, clauses, facts, v, out_lines)
+
+
+def _replacement_presumed_lost(r: RefundReplacement, today: date) -> bool:
+    """A replacement stops being the remedy only when it is itself presumed lost, under its OWN
+    window (shipping v1 clause 3). A canceled replacement was never a remedy; one with no ship date
+    yet is still pending, so it is not lost."""
+    if r.status == "canceled":
+        return True
+    ship = r.shipment
+    if ship is None or ship.delivered_on is not None:
+        return False
+    if ship.status == "lost":
+        return True
+    return ship.shipped_on is not None and today >= presumed_lost_date(ship.shipped_on)
 
 
 def _enforce_paid_invariant(order: RefundOrder, amounts: list[int]) -> tuple[list[int], bool]:
@@ -641,6 +745,7 @@ __all__ = [
     "RefundItem",
     "RefundOrder",
     "RefundOutcome",
+    "RefundReplacement",
     "RefundShipment",
     "RefundTerms",
     "decide_refund",

@@ -3,7 +3,7 @@ from keyword arguments (boundary tests). No database, no clock."""
 
 from datetime import date, datetime, timedelta
 
-from app.domain.rules.refund import RefundItem, RefundOrder, RefundShipment
+from app.domain.rules.refund import RefundItem, RefundOrder, RefundReplacement, RefundShipment
 from app.domain.types import PurchaseDate
 from app.seed.definitions import ORDERS, PRODUCTS, OrderDef
 
@@ -14,6 +14,18 @@ NUMBER = {o.order_number: o for o in ORDERS}
 
 def day(ts: datetime) -> date:
     return ts.date()  # the seed instants are noon UTC, so the UTC calendar date is unambiguous
+
+
+def _shipment(o: OrderDef) -> RefundShipment | None:
+    if o.shipment is None:
+        return None
+    s = o.shipment
+    return RefundShipment(
+        status=s.status,
+        shipped_on=day(s.shipped_at),
+        delivered_on=None if s.delivered_at is None else day(s.delivered_at),
+        has_delivery_exception=any(e.code == "DELIVERY_EXCEPTION" for e in s.events),
+    )
 
 
 def from_seed(key_or_number: str) -> RefundOrder:
@@ -29,31 +41,38 @@ def from_seed(key_or_number: str) -> RefundOrder:
             digital_accessed_on=None
             if i.digital_accessed_at is None
             else day(i.digital_accessed_at),
+            items_total=i.items_total,
+            items_shipped=i.items_shipped,
         )
         for n, i in enumerate(o.items)
     )
-    ship = None
-    if o.shipment is not None:
-        s = o.shipment
-        ship = RefundShipment(
-            status=s.status,
-            shipped_on=day(s.shipped_at),
-            delivered_on=None if s.delivered_at is None else day(s.delivered_at),
-            has_delivery_exception=any(e.code == "DELIVERY_EXCEPTION" for e in s.events),
+    if o.shipping_cents > 0:  # shipping is an order line (migration 0014; the loader seeds it)
+        items += (
+            RefundItem(
+                f"{o.order_number}:shipping",
+                "SHIPPING",
+                "shipping",
+                o.shipping_cents,
+                line_type="shipping",
+            ),
         )
-    replaced = any(x.replacement_for == o.key for x in ORDERS)
+    replacements = tuple(
+        RefundReplacement(x.order_number, x.status, _shipment(x))
+        for x in ORDERS
+        if x.replacement_for == o.key
+    )
     return RefundOrder(
         order_number=o.order_number,
         purchase_date=PurchaseDate(day(o.placed_at)),
         status=o.status,
         items=items,
-        shipment=ship,
         kind=o.kind,
         list_total_cents=o.list_total_cents,
         discount_cents=o.discount_cents,
         shipping_cents=o.shipping_cents,
         paid_cents=o.paid_cents,
-        has_replacement=replaced,
+        replacements=replacements,
+        shipment=_shipment(o),
     )
 
 

@@ -60,14 +60,21 @@ def test_the_terms_in_code_equal_the_stored_policy_text(terms: refund_module.Ref
     assert "Digital add-on" in text[terms.digital] or "Digital add-ons" in text[terms.digital]
     assert ("exception" in text[terms.exception]) if terms.exception else terms.version == 1
     assert "actually paid" in text[terms.promo_paid_clause] if terms.promo_paid_clause else True
-    if terms.lost:
-        assert "Lost or undelivered" in text[terms.lost]
-    else:  # v2 states no lost-shipment rule: it is carried forward (SPEC 18)
-        assert not any("Lost or undelivered" in t for t in text.values())
-    if terms.proration:
-        assert "prorated" in text[terms.proration]
+    # The ceiling is cumulative per order in BOTH versions (SPEC 18.6, drafting correction).
+    assert "cumulative" in text[terms.ceiling] and "prior refunds" in text[terms.ceiling]
+    incorporated = {i.clause_number: set(i.targets) for i in doc.incorporations}
+    if terms.lost_via:  # v2: the RESIDUAL clause states nothing itself; it points at v1
+        assert "remains in effect" in text[terms.lost] and terms.lost == terms.proration
+        assert set(terms.lost_via) | set(terms.proration_via) <= incorporated[terms.lost]
+        assert terms.lost_via == ("refund-v1-clause-2",)
+        # the anchor is stated by the window clause itself, NOT linked to v1's superseded 30 days
+        assert "presumed-lost date" in text[terms.window]
+        assert "refund-v1-clause-1" not in incorporated[terms.lost]
+        assert terms.proration_via == ("refund-v1-clause-4",)
+        assert not any("Lost or undelivered" in t for t in text.values())  # stated once, in v1
     else:
-        assert not any("prorated" in t for t in text.values())
+        assert "Lost or undelivered" in text[terms.lost] and "shipping charge" in text[terms.lost]
+        assert "prorated" in text[terms.proration] and "rounded up" in text[terms.proration]
 
 
 def test_every_clause_key_the_engine_can_cite_exists_in_the_corpus() -> None:
@@ -105,10 +112,18 @@ def test_case_2_promotional_discount_refunds_the_amount_paid_never_list_price() 
     assert o.list_total_cents == 8000 and o.paid_cents == 6500  # list and paid differ
     d = decide_refund(o, TODAY)
     assert d.outcome is ALLOWED and d.policy_version == 2
-    assert lines(d) == [3750, 2250] and d.aggregate_cents == d.authorized_cents == 6000
+    assert lines(d) == [3750, 2250, 0] and d.aggregate_cents == d.authorized_cents == 6000
     assert d.aggregate_cents < o.list_total_cents - o.discount_cents + 1  # never list price
-    assert d.reason_codes == (R.REFUND_WITHIN_WINDOW, R.PAID_AMOUNT_BASIS_POLICY)
-    assert d.decisive_clause_keys == ("refund-v2-clause-1", "refund-v2-clause-4")
+    assert d.reason_codes == (
+        R.REFUND_WITHIN_WINDOW,
+        R.SHIPPING_NOT_REFUNDABLE,  # the 500 shipping line: the shipment arrived
+        R.PAID_AMOUNT_BASIS_POLICY,
+    )
+    assert d.decisive_clause_keys == (
+        "refund-v2-clause-1",
+        "refund-v2-clause-6",
+        "refund-v2-clause-4",
+    )
     assert d.supporting_clause_keys == ("refund-v2-clause-2",)
 
 
@@ -126,35 +141,42 @@ def test_case_4_a_final_sale_item_never_contributes_and_shipping_is_not_refunded
     o = from_seed("final_sale_item_in_order")
     d = decide_refund(o, TODAY)
     assert d.outcome is ALLOWED
-    assert lines(d) == [3000, 0] and d.aggregate_cents == 3000  # paid 5500: 500 shipping, 2000 mug
+    assert lines(d) == [3000, 0, 0] and d.aggregate_cents == 3000  # paid 5500: mug 2000, ship 500
     assert o.paid_cents == 5500
     assert d.lines[1].reason_codes == (R.FINAL_SALE_EXCLUDED,)
-    assert d.decisive_clause_keys == ("refund-v2-clause-1", "refund-v2-clause-5")
-    assert d.supporting_clause_keys == ("refund-v2-clause-2",)
-
-
-def test_case_5_a_presumed_lost_shipment_refunds_its_value_in_full_from_the_lost_date() -> None:
-    o = from_seed("lost_shipment_with_replacement_sent")
-    assert o.has_replacement  # SIM-2002 was sent; the policy is silent on that (SPEC 18)
-    d = decide_refund(o, TODAY)
-    assert d.outcome is ALLOWED and d.policy_version == 2
-    assert lines(d) == [4800, 2200] and d.aggregate_cents == 7000
-    assert d.facts["presumed_lost_on"] == "2026-03-25" and d.facts["window_anchor"] == "2026-03-25"
-    assert d.facts["anchor_basis"] == "presumed_lost" and d.facts["days_since_anchor"] == 21
-    assert d.reason_codes == (
-        R.REFUND_WITHIN_WINDOW,
-        R.LOST_SHIPMENT_FULL_REFUND,
-        R.RULE_CARRIED_FORWARD_FROM_V1,  # v2 states no lost-shipment rule
-        R.REPLACEMENT_ALREADY_SENT,  # recorded for the reviewer, changes nothing
+    assert d.lines[2].reason_codes == (R.SHIPPING_NOT_REFUNDABLE,)  # delivered: shipping stays
+    assert d.decisive_clause_keys == (
+        "refund-v2-clause-1",
+        "refund-v2-clause-5",
+        "refund-v2-clause-6",
     )
-    assert d.decisive_clause_keys == ("shipping-v1-clause-2", "refund-v2-clause-1")
     assert d.supporting_clause_keys == ("refund-v2-clause-2",)
+
+
+def test_case_5_the_replacement_is_the_remedy_so_the_lost_original_is_denied() -> None:
+    """SIM-2001 is presumed lost and SIM-2002 (the replacement) is in transit: refunding the original
+    too would give the customer the goods and the money. Denied, naming the replacement and its OWN
+    window (shipping v1 clause 4); not a handoff (SPEC 18.6)."""
+    o = from_seed("lost_shipment_with_replacement_sent")
+    assert [r.order_number for r in o.replacements] == ["SIM-2002"]
+    d = decide_refund(o, TODAY)
+    assert d.outcome is DENIED and d.policy_version == 2 and d.handoff is None
+    assert lines(d) == [0, 0] and d.authorized_cents == 0
+    assert d.reason_codes == (R.REPLACEMENT_IS_REMEDY,)
+    assert d.facts["replacement_order"] == "SIM-2002"
+    assert d.facts["replacement_shipped_on"] == "2026-04-06"
+    assert (
+        d.facts["replacement_presumed_lost_on"] == "2026-04-20"
+    )  # its own window, not the original's
+    assert d.facts["presumed_lost_on"] == "2026-03-25"
+    assert d.decisive_clause_keys == ("shipping-v1-clause-4",)
+    assert "shipping-v1-clause-3" in d.supporting_clause_keys
 
 
 def test_supplementary_v1_order_delivered_after_the_cutover_is_outside_its_30_day_window() -> None:
     d = decide_refund(from_seed("v1_order_delivered_after_cutover_window_expired"), TODAY)
     assert d.outcome is DENIED and d.policy_version == 1
-    assert d.facts["days_since_anchor"] == 41 and lines(d) == [0, 0]
+    assert d.facts["days_since_anchor"] == 41 and lines(d) == [0, 0, 0]
     assert d.reason_codes == (R.REFUND_WINDOW_EXPIRED,)
     assert d.decisive_clause_keys == ("refund-v1-clause-1",) and d.supporting_clause_keys == ()
 
@@ -162,14 +184,20 @@ def test_supplementary_v1_order_delivered_after_the_cutover_is_outside_its_30_da
 def test_supplementary_a_delivery_exception_permits_the_early_refund_under_v2() -> None:
     d = decide_refund(from_seed("v2_delivery_exception_before_presumed_lost"), TODAY)
     assert d.outcome is ALLOWED and d.policy_version == 2
-    assert lines(d) == [5000] and d.authorized_cents == 5000  # the 500 shipping is not refundable
+    # The whole shipment is undelivered, so the 500 shipping line is refunded too: 5500 of 5500 paid.
+    assert lines(d) == [5000, 500] and d.authorized_cents == 5500
     assert d.facts["presumed_lost_on"] == "2026-04-16"  # one day away: "without waiting" matters
     assert d.reason_codes == (
         R.REFUND_WITHIN_WINDOW,
         R.CARRIER_DELIVERY_EXCEPTION,
         R.EARLY_REFUND_ON_DELIVERY_EXCEPTION,
+        R.SHIPPING_CHARGE_REFUNDED,
     )
-    assert d.decisive_clause_keys == ("refund-v2-clause-3", "refund-v2-clause-1")
+    assert d.decisive_clause_keys == (
+        "refund-v2-clause-3",
+        "refund-v2-clause-1",
+        "refund-v2-clause-6",
+    )
     assert d.supporting_clause_keys == ("shipping-v1-clause-2", "refund-v2-clause-2")
 
 
@@ -192,7 +220,8 @@ def test_supplementary_in_transit_shipments_are_not_yet_refundable(key: str) -> 
     d = decide_refund(from_seed(key), TODAY)
     assert d.outcome is DENIED and d.aggregate_cents == 0
     assert d.reason_codes == (R.NOT_YET_REFUNDABLE, R.NOT_YET_PRESUMED_LOST)
-    assert d.decisive_clause_keys == ("shipping-v1-clause-2",)
+    # v2 carries the lost-shipment rule through its residual clause 6 (incorporating v1 clause 2).
+    assert d.decisive_clause_keys == ("shipping-v1-clause-2", "refund-v2-clause-6")
 
 
 def test_a_purchase_with_no_shipment_has_no_window_to_measure() -> None:
@@ -369,22 +398,23 @@ def test_v2_cites_the_promo_clause_and_v1_relies_on_the_invariant_and_cites_noth
     assert R.PAID_AMOUNT_BASIS_INVARIANT not in no_discount.reason_codes
 
 
-def test_proration_is_applied_to_the_amount_paid_after_the_discount_and_rounds_down() -> None:
-    kw = {"box_items_total": 3, "box_items_shipped": 1}
+def test_proration_is_applied_to_the_amount_paid_after_the_discount_and_rounds_up() -> None:
+    kw = {"items_total": 3, "items_shipped": 1}
     o = delivered_order(V1_DAY, TODAY - timedelta(days=3), 1001, discount=500, **kw)
     d = decide_refund(o, TODAY)
-    assert lines(d) == [667]  # floor(1001 * 2 / 3): paid (post-discount) first, then proration
+    assert lines(d) == [668]  # ceil(1001 * 2 / 3) = 668: paid (post-discount) first, then proration
     assert d.reason_codes[:2] == (R.REFUND_WITHIN_WINDOW, R.PRORATED_BY_ITEMS_SHIPPED)
     assert "refund-v1-clause-4" in d.decisive_clause_keys
     v2 = decide_refund(delivered_order(V2_DAY, TODAY - timedelta(days=3), 1001, **kw), TODAY)
-    assert lines(v2) == [667] and R.RULE_CARRIED_FORWARD_FROM_V1 in v2.reason_codes
-    assert not any(
-        k.startswith("refund-v2") and k.endswith("clause-4") for k in v2.applied_clause_keys
-    )
+    assert lines(v2) == [668] and R.RULE_CARRIED_FORWARD_FROM_V1 in v2.reason_codes
+    # v2 cites its residual clause 6, "incorporating v1 clause 4"; it does not cite nothing.
+    by_key = {c.key: c for c in v2.applied}
+    assert by_key["refund-v2-clause-6"].decisive
+    assert by_key["refund-v2-clause-6"].incorporating == ("refund-v1-clause-4",)
 
 
 def test_a_fully_shipped_box_prorates_to_nothing_and_a_lost_one_is_not_prorated() -> None:
-    kw = {"box_items_total": 4, "box_items_shipped": 4}
+    kw = {"items_total": 4, "items_shipped": 4}
     d = decide_refund(delivered_order(V1_DAY, TODAY - timedelta(days=3), 3000, **kw), TODAY)
     assert d.outcome is DENIED
     assert R.NOTHING_REFUNDABLE in d.reason_codes and d.decisive_clause_keys == (
@@ -392,7 +422,7 @@ def test_a_fully_shipped_box_prorates_to_nothing_and_a_lost_one_is_not_prorated(
     )
     lost = RefundOrder(
         "T-LOST", PurchaseDate(V2_DAY), "shipped",
-        (RefundItem("i", "S", "general", 3000, box_items_total=4, box_items_shipped=4),),
+        (RefundItem("i", "S", "general", 3000, items_total=4, items_shipped=4),),
         RefundShipment("lost", date(2026, 4, 1), None), paid_cents=3000,
     )  # fmt: skip
     dl = decide_refund(lost, TODAY)  # never consumed, so not prorated (SPEC 18)
