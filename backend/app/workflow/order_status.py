@@ -291,7 +291,7 @@ class OrderStatusWorkflow:
         # ---- model call 1: extraction -----------------------------------------------------------
         try:
             got = self._client.complete_structured(
-                extraction_request(message, scenario_id), Extraction, budget=budget
+                extraction_request(message, scenario_id, ctx.customer_id), Extraction, budget=budget
             )
         except CallBudgetExceeded as exc:
             return self._to_handoff(machine, ReasonCode.CALL_BUDGET_EXCEEDED, str(exc))
@@ -454,7 +454,13 @@ class OrderStatusWorkflow:
         try:
             exp = self._client.complete_structured(
                 explanation_request(
-                    det, applied, retrieved.context(), message, self._max_tokens, scenario_id
+                    det,
+                    applied,
+                    retrieved.context(),
+                    message,
+                    self._max_tokens,
+                    scenario_id,
+                    ctx.customer_id,
                 ),
                 Explanation,
                 budget=budget,

@@ -49,4 +49,12 @@ All images must build and run on `linux/arm64`. The real arm64 verification is a
 
 ## Status
 
-The roles, policies, grants, bootstrap script and compose wiring are built and tested locally (fresh-volume path on a throwaway container; the existing development database converted). Nothing has been run on OCI yet.
+The roles, policies, grants, bootstrap script and compose wiring are built and tested locally. Nothing has been run on OCI yet.
+
+**Compose, clean volume, run end to end (2026-11-12, a throwaway project, `docker compose -p srverify up --build`).** Verified: `db/init/02-roles.sh` created both roles (neither superuser nor BYPASSRLS); the `migrate` service ran Alembic as `support_owner` to 0013 and exited 0 (all 27 tables owned by `support_owner`); the backend started and held its connections as `support_app` only; seeding (bootstrap superuser) and policy ingestion (owner) ran from the backend image; a request without a session was a 401; a request with a session resolved the customer under RLS, ran the workflow, wrote its record (messages, turn trace, tagged `llm_calls` row) as `support_app`, and answered honestly with state `FAILED` when the model call could not be served; and the backend **refused to start** with `DATABASE_URL` set to the owner ("owns 27 table(s)") and to the superuser ("is a superuser and has BYPASSRLS").
+
+**What did not work out of the box, and is not fixed here:**
+1. The compose defaults cannot serve `/chat`: `LLM_PROVIDER=fake` needs `LLM_FIXTURES_DIR` and compose sets none, so the route returns 503 "assistant not configured". With fixtures mounted it still cannot succeed, because the FakeAdapter is keyed by scenario ID and `/chat` carries none (`FixtureMissing`, reported honestly as `FAILED`). A successful reply in compose needs a real provider: `GROQ_API_KEY` is not passed into the backend service's environment by `docker-compose.yml`. A decision for the PM, not made here.
+2. There is no login route: a session exists only through `create_session` (tests) or SQL. The verification inserted one row as the superuser.
+3. Seeding and policy ingestion are not compose services; they were run with `docker compose run -e ADMIN_DATABASE_URL=... backend python -m app.seed` and the same for `app.retrieval.ingest` with `MIGRATION_DATABASE_URL`. A one-command first start does not exist yet.
+4. Not verified: the 0013 downgrade, and a real-provider reply in the container.

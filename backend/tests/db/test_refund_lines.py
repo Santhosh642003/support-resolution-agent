@@ -173,3 +173,33 @@ def test_order_total_vs_lines_drift_is_detected(conn: Connection) -> None:
     conn.execute(text("UPDATE orders SET refunded_total_cents = 1000 WHERE id = :o"), {"o": o})
     levels = {d.level for d in find_refund_line_drift(conn)}
     assert "order_vs_lines" in levels
+
+
+def test_without_security_invoker_row_level_security_hides_drift_from_the_check(
+    conn: Connection,
+) -> None:
+    """F-010. The same drift as above, but with the view's security_invoker option removed: the view
+    then runs as its owner, who is subject to FORCE ROW LEVEL SECURITY and sees no rows, so the
+    invariant check reports 'no drift' about a database that has drifted. Rolled back with the test."""
+    c = make_customer(conn)
+    o = make_order(conn, c, items=[6000, 4000])
+    big, _ = item_ids(conn, o)
+    make_refund(conn, c, o, _action(conn, c, o, 3000), 3000, lines=[(big, 3000)])
+    conn.execute(text("UPDATE order_items SET refunded_cents = 0 WHERE id = :i"), {"i": big})
+    assert find_refund_line_drift(conn) != []  # visible with the option set (migration 0012)
+    conn.execute(text("ALTER VIEW v_refund_line_drift RESET (security_invoker)"))
+    assert find_refund_line_drift(conn) == []  # the silent failure the option prevents
+
+
+def test_every_view_in_the_schema_is_security_invoker(conn: Connection) -> None:
+    """A view over a protected table without the option silently returns only the owner's (empty)
+    scope. A new view must opt in, or this fails (F-010)."""
+    views = conn.execute(
+        text(
+            "SELECT c.relname, coalesce(c.reloptions::text, '') AS opts FROM pg_class c"
+            " JOIN pg_namespace n ON n.oid = c.relnamespace"
+            " WHERE n.nspname = 'public' AND c.relkind = 'v'"
+        )
+    ).all()
+    assert views, "expected the drift views"
+    assert [v.relname for v in views if "security_invoker=true" not in v.opts] == []

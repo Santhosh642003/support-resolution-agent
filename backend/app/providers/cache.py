@@ -13,9 +13,11 @@ so a cache is a *replay store of one sampling*, not a reproducible computation. 
 import json
 from dataclasses import dataclass
 from enum import StrEnum
+from uuid import UUID
 
 from sqlalchemy import Engine, text
 
+from app.db.rls import set_current_customer
 from app.providers.base import LLMRequest, LLMResponse
 
 
@@ -36,10 +38,14 @@ class LLMCache:
         self._engine = engine
         self.mode = mode
 
-    def get(self, key: str) -> CacheEntry | None:
+    def get(self, key: str, customer_id: UUID | None = None) -> CacheEntry | None:
         if self.mode is CacheMode.OFF:
             return None
-        with self._engine.connect() as conn:
+        # One transaction scoped to the prompt's customer: row-level security shows this
+        # customer's rows and the shared (NULL) ones, nobody else's (SPEC 17.7).
+        with self._engine.begin() as conn:
+            if customer_id is not None:
+                set_current_customer(conn, customer_id)
             row = conn.execute(
                 text("SELECT response, adapter_calls FROM llm_cache WHERE cache_key = :k"),
                 {"k": key},
@@ -57,17 +63,21 @@ class LLMCache:
         req: LLMRequest,
         response: LLMResponse,
         adapter_calls: int,
+        customer_id: UUID | None = None,
     ) -> bool:
         """Store a validated success. Returns False if an entry already exists (first wins)."""
         if self.mode is not CacheMode.READ_WRITE:
             return False
         stored = response.model_copy(update={"trace": None})  # traces are per-call, not cached
         with self._engine.begin() as conn:
+            if customer_id is not None:
+                set_current_customer(conn, customer_id)
             res = conn.execute(
                 text(
                     "INSERT INTO llm_cache (cache_key, provider, model, kind,"
-                    " prompt_template_version, tool_schema_version, response, adapter_calls)"
-                    " VALUES (:k, :p, :m, :kind, :ptv, :tsv, CAST(:r AS jsonb), :n)"
+                    " prompt_template_version, tool_schema_version, response, adapter_calls,"
+                    " customer_id)"
+                    " VALUES (:k, :p, :m, :kind, :ptv, :tsv, CAST(:r AS jsonb), :n, :c)"
                     " ON CONFLICT (cache_key) DO NOTHING"
                 ),
                 {
@@ -79,6 +89,7 @@ class LLMCache:
                     "tsv": req.tool_schema_version,
                     "r": json.dumps(stored.model_dump(mode="json")),
                     "n": adapter_calls,
+                    "c": customer_id,
                 },
             )
         return res.rowcount == 1

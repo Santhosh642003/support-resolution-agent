@@ -9,6 +9,7 @@ claims about state are carried VERBATIM so they are never silently ignored (SPEC
 
 import re
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -53,7 +54,9 @@ def _wrap_untrusted(message: str) -> str:
     return f'<customer_message untrusted="true">\n{safe}\n</customer_message>'
 
 
-def extraction_request(message: str, scenario_id: str | None = None) -> LLMRequest:
+def extraction_request(
+    message: str, scenario_id: str | None = None, customer_id: UUID | None = None
+) -> LLMRequest:
     return LLMRequest(
         messages=(
             Message(role="system", content=EXTRACTION_SYSTEM),
@@ -63,7 +66,7 @@ def extraction_request(message: str, scenario_id: str | None = None) -> LLMReque
         max_tokens=EXTRACTION_MAX_TOKENS,
         reasoning_effort=EXTRACTION_EFFORT,
         prompt_template_version=EXTRACTION_TEMPLATE_VERSION,
-        context=CallContext(scenario_id=scenario_id, step=0),
+        context=CallContext(scenario_id=scenario_id, step=0, customer_id=customer_id),
     )
 
 

@@ -19,11 +19,13 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import Engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.db.rls import set_current_customer
 from app.providers.base import (
     CacheMiss,
     CallBudgetExceeded,
@@ -180,7 +182,7 @@ class LLMClient:
         resp: LLMResponse | None = None
         try:
             if self._cache is not None and self._mode is not CacheMode.OFF:
-                entry = self._cache.get(key)
+                entry = self._cache.get(key, req.context.customer_id)
                 if entry is not None:
                     cache_status = "hit"
                     if budget:
@@ -208,7 +210,14 @@ class LLMClient:
             resp, parsed, attempts = self._fresh(req, kind, schema, budget, state)
             if self._cache is not None and self._mode is CacheMode.READ_WRITE:
                 self._cache.put(
-                    key, self.adapter.name, self.adapter.model, kind, req, resp, attempts
+                    key,
+                    self.adapter.name,
+                    self.adapter.model,
+                    kind,
+                    req,
+                    resp,
+                    attempts,
+                    req.context.customer_id,
                 )
             return (
                 self._finish(resp, req, trace_id, cache_status, state, started, None, kind),
@@ -231,7 +240,8 @@ class LLMClient:
                     model_ms=state.model_s * 1000,
                     total_ms=(self._perf() - started) * 1000,
                     scenario_id=req.context.scenario_id,
-                )
+                ),
+                req.context.customer_id,
             )
             raise
 
@@ -368,23 +378,25 @@ class LLMClient:
             total_ms=(self._perf() - started) * 1000,
             scenario_id=req.context.scenario_id,
         )
-        self._log_trace(trace)
+        self._log_trace(trace, req.context.customer_id)
         return resp.model_copy(update={"trace": trace})
 
-    def _log_trace(self, trace: CallTrace) -> None:
+    def _log_trace(self, trace: CallTrace, customer_id: UUID | None = None) -> None:
         log.info("llm_call %s", trace.model_dump_json())
         if self._engine is None:
             return
         try:
             with self._engine.begin() as conn:
+                if customer_id is not None:
+                    set_current_customer(conn, customer_id)
                 conn.execute(
                     text(
                         "INSERT INTO llm_calls (trace_id, scenario_id, provider, model,"
                         " cache_status, outcome, error_kind, adapter_calls, transport_attempts,"
                         " prompt_tokens, completion_tokens, model_ms, total_ms, error_detail,"
-                        " native_fallbacks)"
+                        " native_fallbacks, customer_id)"
                         " VALUES (:t, :s, :p, :m, :c, :o, :e, :a, :ta, :pt, :ct, :mm, :tm,"
-                        " :ed, :nf)"
+                        " :ed, :nf, :cu)"
                     ),
                     {
                         "t": trace.trace_id,
@@ -402,6 +414,7 @@ class LLMClient:
                         "tm": round(trace.total_ms),
                         "ed": trace.error_detail,
                         "nf": trace.native_fallbacks,
+                        "cu": customer_id,
                     },
                 )
         except SQLAlchemyError:  # a failed trace write must not change the call's outcome

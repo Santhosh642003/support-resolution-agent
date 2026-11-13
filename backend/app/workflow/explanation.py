@@ -18,6 +18,7 @@ import json
 import re
 from collections.abc import Sequence
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -115,6 +116,7 @@ def explanation_request(
     customer_message: str,
     max_tokens: int,
     scenario_id: str | None = None,
+    customer_id: UUID | None = None,
 ) -> LLMRequest:
     applied_keys = {c.chunk_key for c in applied}
     finding = {
@@ -151,7 +153,7 @@ def explanation_request(
         max_tokens=max_tokens,  # reasoning tokens count against it
         reasoning_effort=EXPLANATION_EFFORT,
         prompt_template_version=EXPLANATION_TEMPLATE_VERSION,
-        context=CallContext(scenario_id=scenario_id, step=1),
+        context=CallContext(scenario_id=scenario_id, step=1, customer_id=customer_id),
     )
 
 

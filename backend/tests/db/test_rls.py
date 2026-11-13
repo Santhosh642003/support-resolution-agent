@@ -54,11 +54,14 @@ UNPROTECTED = {
     "policy_documents": "shared reference data, read-only to the app role",
     "policy_chunks": "shared reference data, read-only to the app role",
     "policy_incorporations": "shared reference data, read-only to the app role",
-    "llm_cache": "keyed by prompt hash, no customer id (NOTE: its response text can echo a customer "
-    "message; the app only reads by exact key, but see SPEC 17.5)",
-    "llm_usage_daily": "global provider quota counters",
-    "llm_calls": "global per-call diagnostics, no customer id",
+    # Columns are (provider text, day date, requests integer): counters, no text of any kind, so it
+    # cannot hold customer data. (llm_cache and llm_calls CAN, and are protected: migration 0013.)
+    "llm_usage_daily": "global provider quota counters; no text column, cannot hold customer data",
 }
+
+# Protected tables whose policy also admits NULL-customer rows (shared). A "returns no rows with no
+# customer set" assertion on these counts only the rows that belong to someone.
+SHARED_NULL_TABLES = {"llm_cache", "llm_calls"}
 
 
 @dataclass
@@ -67,6 +70,7 @@ class World:
     superuser: Engine
     owner: Engine
     app: Engine  # pool of exactly one connection, so reuse between requests is forced
+    llm: Engine  # support_app with a normal pool: the cache and call log use their own connections
     sessions: dict[str, UUID]
     embedder: OnnxBgeEmbedder
 
@@ -96,7 +100,9 @@ def world() -> Iterator[World]:
             _role_url(base, name, "support_app", APP_PASSWORD), pool_size=1, max_overflow=0
         )
         owner = create_engine(_role_url(base, name, "support_owner", OWNER_PASSWORD))
-        yield World(name, su, owner, app, sessions, embedder)
+        llm = create_engine(_role_url(base, name, "support_app", APP_PASSWORD))
+        yield World(name, su, owner, app, llm, sessions, embedder)
+        llm.dispose()
         app.dispose()
         owner.dispose()
 
@@ -196,16 +202,18 @@ def test_the_owner_is_also_subject_to_the_policies_because_of_force(world: World
     with as_customer(world.owner, None) as c:
         assert c.execute(text("SELECT count(*) FROM orders")).scalar_one() == 0
         for t in protected_tables(c):
-            assert c.execute(text(f"SELECT count(*) FROM {t}")).scalar_one() == 0, t  # noqa: S608
+            where = " WHERE customer_id IS NOT NULL" if t in SHARED_NULL_TABLES else ""
+            assert c.execute(text(f"SELECT count(*) FROM {t}{where}")).scalar_one() == 0, t  # noqa: S608
 
 
 def test_with_no_customer_set_every_protected_table_returns_no_rows(world: World) -> None:
     with as_customer(world.app, None) as c:
         for t in protected_tables(c):
             # a table the app role may not read at all raises 42501; the rest must be empty
+            where = " WHERE customer_id IS NOT NULL" if t in SHARED_NULL_TABLES else ""
             try:
                 with c.begin_nested():
-                    n = c.execute(text(f"SELECT count(*) FROM {t}")).scalar_one()  # noqa: S608
+                    n = c.execute(text(f"SELECT count(*) FROM {t}{where}")).scalar_one()  # noqa: S608
             except DBAPIError as exc:
                 assert sqlstate(exc) == "42501", (t, exc)
                 continue
@@ -358,9 +366,20 @@ def test_the_policy_definitions_are_exactly_these(world: World) -> None:
             )
         }
     expected_expr = "(customer_id = ( SELECT app_current_customer() AS app_current_customer))"
-    for t in ("orders", "conversations", "decisions", "actions", "refunds", "audit_log"):
+    for t in ("orders", "conversations", "decisions", "actions", "refunds"):
         p = pol[(t, "customer_isolation")]
         assert (p.cmd, p.qual, p.with_check) == ("ALL", expected_expr, expected_expr), t
+    current = "(SELECT app_current_customer() AS app_current_customer)"
+    audit = pol[("audit_log", "customer_isolation")]  # NULL is not writable, stated in the policy
+    assert audit.qual == expected_expr
+    assert audit.with_check == f"((customer_id IS NOT NULL) AND (customer_id = ( {current[1:-1]})))"
+    shared = f"((customer_id IS NULL) OR (customer_id = ( {current[1:-1]})))"
+    for t in ("llm_cache", "llm_calls"):
+        assert pol[(t, "customer_isolation")].qual == shared, t
+    assert pol[("llm_cache", "customer_isolation")].with_check == shared
+    assert pol[("llm_calls", "customer_isolation")].with_check == (
+        f"((customer_id = ( {current[1:-1]})) OR ((customer_id IS NULL) AND (error_detail IS NULL)))"
+    )
     p = pol[("customers", "customer_isolation")]
     assert p.qual == "(id = ( SELECT app_current_customer() AS app_current_customer))"
     assert "decisions" in pol[("decision_policies", "customer_isolation")].qual
@@ -504,3 +523,173 @@ def test_the_application_refuses_to_start_on_a_privileged_role(world: World) -> 
                 pass
     finally:
         settings.database_url = original
+
+
+# --- migration 0013: audit_log NULL, llm_cache, llm_calls (SPEC 17.7) -----------------------------
+
+
+def test_the_app_role_cannot_write_an_audit_row_without_a_customer(world: World) -> None:
+    ins = (
+        "INSERT INTO audit_log (actor_type, customer_id, event, entity_type, entity_id)"
+        " VALUES ('system', :c, 'probe', 'order', gen_random_uuid())"
+    )
+    with as_customer(world.app, ALEX) as c:
+        c.execute(text(ins), {"c": ALEX})  # own customer: allowed
+        for who in (None, BLAIR):  # NULL, and another customer's id: both refused
+            with pytest.raises(DBAPIError) as exc, c.begin_nested():
+                c.execute(text(ins), {"c": who})
+            assert sqlstate(exc.value) == "42501", who
+    with as_customer(world.app, None) as c:  # no customer bound: still cannot write a NULL row
+        with pytest.raises(DBAPIError) as exc:
+            c.execute(text(ins), {"c": None})
+        assert sqlstate(exc.value) == "42501"
+    with as_customer(world.superuser, None) as c:  # the boundary: only a bypassing role can
+        c.execute(text(ins), {"c": None})
+
+
+def _client(world: World, mode: Any = None, *, script: list[Any] | None = None) -> Any:
+    from app.providers.cache import CacheMode
+    from app.providers.client import LLMClient
+
+    adapter = ScriptedAdapter(script if script is not None else [])
+    return adapter, LLMClient(adapter, engine=world.llm, cache_mode=mode or CacheMode.READ_WRITE)
+
+
+def _req(customer: UUID | None, text_: str = "cache probe") -> Any:
+    from app.providers.base import CallContext, LLMRequest, Message
+
+    return LLMRequest(
+        messages=(Message(role="user", content=text_),),
+        context=CallContext(customer_id=customer),
+    )
+
+
+def test_a_cached_response_is_tagged_with_its_customer_and_shared_only_when_untagged(
+    world: World,
+) -> None:
+    from app.providers.base import CacheMiss
+    from app.providers.cache import CacheMode
+    from tests.providers.helpers import reply
+
+    text_ = "alex only: where is order SIM-2001? (cache rls probe a1)"
+    adapter, live = _client(world, script=[reply("alex-private"), reply("shared-answer")])
+    live.complete(_req(ALEX, text_))  # written inside alex's transaction
+    live.complete(_req(None, "no customer data in this prompt (cache rls probe a2)"))
+    with world.superuser.connect() as c:
+        tags = dict(
+            c.execute(
+                text(
+                    "SELECT response->>'text', customer_id FROM llm_cache WHERE provider = 'scripted'"
+                    " AND response->>'text' IN ('alex-private', 'shared-answer')"
+                )
+            ).all()
+        )
+    assert tags == {"alex-private": ALEX, "shared-answer": None}
+
+    # Same key, three readers (replay_only: a miss raises and makes NO call).
+    _, replay = _client(world, CacheMode.REPLAY_ONLY)
+    assert replay.complete(_req(ALEX, text_)).text == "alex-private"
+    with pytest.raises(CacheMiss):
+        replay.complete(_req(BLAIR, text_))  # blair cannot see alex's row
+    with pytest.raises(CacheMiss):
+        replay.complete(_req(None, text_))  # and neither can a request with no customer
+    shared = "no customer data in this prompt (cache rls probe a2)"
+    assert replay.complete(_req(BLAIR, shared)).text == "shared-answer"  # NULL rows are shared
+    assert replay.complete(_req(ALEX, shared)).text == "shared-answer"
+    assert adapter.calls == 2  # the replays made no provider call
+
+
+def test_eval_replay_reads_each_cases_own_rows_across_customers_with_zero_calls(
+    world: World,
+) -> None:
+    """The eval runner executes each case as that case's (seeded) customer, so it binds the
+    customer per case exactly as the request path does; every case replays from the cache."""
+    from app.providers.cache import CacheMode
+    from tests.providers.helpers import reply
+
+    cases = [(ALEX, "replay probe alex (b1)", "A"), (BLAIR, "replay probe blair (b2)", "B")]
+    adapter, live = _client(world, script=[reply("A"), reply("B")])
+    for who, msg, _ in cases:
+        live.complete(_req(who, msg))
+    adapter2, replay = _client(world, CacheMode.REPLAY_ONLY)
+    got = [replay.complete(_req(who, msg)).text for who, msg, _ in cases]
+    assert got == ["A", "B"] and adapter2.calls == 0
+
+
+def test_the_database_refuses_a_cache_or_call_row_for_another_customer(world: World) -> None:
+    ins_cache = (
+        "INSERT INTO llm_cache (cache_key, provider, model, kind, prompt_template_version,"
+        " tool_schema_version, response, adapter_calls, customer_id)"
+        " VALUES (:k, 'p', 'm', 'complete', 'v', 'v', '{}'::jsonb, 1, :c)"
+    )
+    with as_customer(world.app, ALEX) as c:
+        c.execute(text(ins_cache), {"k": "rls-own", "c": ALEX})
+        c.execute(text(ins_cache), {"k": "rls-shared", "c": None})
+        with pytest.raises(DBAPIError) as exc, c.begin_nested():
+            c.execute(text(ins_cache), {"k": "rls-other", "c": BLAIR})
+        assert sqlstate(exc.value) == "42501"
+    with as_customer(world.app, BLAIR) as c:
+        seen = {r[0] for r in c.execute(text("SELECT cache_key FROM llm_cache"))}
+        assert "rls-own" not in seen and "rls-other" not in seen
+    with as_customer(world.owner, ALEX) as c:  # FORCE: the owner is subject to it too
+        c.execute(text(ins_cache), {"k": "rls-owner-ok", "c": ALEX})
+        with pytest.raises(DBAPIError) as exc, c.begin_nested():
+            c.execute(text(ins_cache), {"k": "rls-owner-bad", "c": BLAIR})
+        assert sqlstate(exc.value) == "42501"
+
+
+def test_a_call_log_row_with_an_error_body_must_belong_to_a_customer(world: World) -> None:
+    """A provider error body can echo the prompt or the failed output, so it can hold customer text:
+    it is never writable on a shared (NULL) row."""
+    ins = (
+        "INSERT INTO llm_calls (trace_id, provider, model, cache_status, outcome, error_kind,"
+        " error_detail, customer_id) VALUES (:t, 'p', 'm', 'miss', :o, :k, :d, :c)"
+    )
+    with as_customer(world.app, ALEX) as c:
+        c.execute(text(ins), {"t": "t1", "o": "error", "k": "X", "d": "echoed text", "c": ALEX})
+        c.execute(text(ins), {"t": "t2", "o": "ok", "k": None, "d": None, "c": None})
+        for bad in (
+            {"t": "t3", "o": "error", "k": "X", "d": "echoed text", "c": None},
+            {"t": "t4", "o": "error", "k": "X", "d": "echoed text", "c": BLAIR},
+        ):
+            with pytest.raises(DBAPIError) as exc, c.begin_nested():
+                c.execute(text(ins), bad)
+            assert sqlstate(exc.value) == "42501", bad["t"]
+        with pytest.raises(DBAPIError) as exc, c.begin_nested():  # no SELECT grant either
+            c.execute(text("SELECT error_detail FROM llm_calls"))
+        assert sqlstate(exc.value) == "42501"
+    with as_customer(world.owner, BLAIR) as c:  # another customer's error body is invisible
+        assert (
+            c.execute(text("SELECT count(*) FROM llm_calls WHERE trace_id = 't1'")).scalar_one()
+            == 0
+        )
+
+
+def test_a_chat_turn_tags_every_cache_and_call_row_with_the_session_customer(world: World) -> None:
+    """The workflow, not the test, supplies the customer: both model calls of a real /chat turn."""
+    from app.providers.cache import CacheMode
+    from app.providers.client import LLMClient
+
+    adapter = ScriptedAdapter([extraction_reply("SIM-2001"), GOOD])
+    llm = LLMClient(adapter, engine=world.llm, cache_mode=CacheMode.READ_WRITE)
+    wf = build_workflow(adapter, world.embedder, guard=FakePromptGuard(), client=llm)
+    app_ = TestClient(create_app(engine=world.app, clock=FixedClock(), workflow=wf))
+    app_.cookies.set(SESSION_COOKIE, str(world.sessions["blair"]))
+    msg = "Where is my order SIM-2001? (rls tagging probe c1)"
+    with world.superuser.connect() as c:
+        first_new = c.execute(text("SELECT coalesce(max(id), 0) + 1 FROM llm_calls")).scalar_one()
+    r = app_.post("/chat", json={"message": msg})
+    assert r.status_code == 200, r.text
+    assert adapter.calls == 2
+    with world.superuser.connect() as c:
+        cache = c.execute(
+            text(
+                "SELECT customer_id FROM llm_cache WHERE provider = 'scripted' AND adapter_calls > 0"
+                " AND response->>'text' LIKE '%SIM-2001%'"
+            )
+        ).all()
+        assert cache and {r_.customer_id for r_ in cache} == {BLAIR}
+        calls = c.execute(
+            text("SELECT customer_id FROM llm_calls WHERE id >= :first"), {"first": first_new}
+        ).all()
+        assert len(calls) == 2 and {r_.customer_id for r_ in calls} == {BLAIR}

@@ -8,6 +8,7 @@ applied by `LLMClient`, so behaviour is comparable across providers and with Fak
 import hashlib
 import json
 from typing import Any, Literal, Protocol
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -55,6 +56,10 @@ class CallContext(_Frozen):
 
     scenario_id: str | None = None
     step: int = 0
+    # Whose data the prompt contains. Used ONLY to tag the cache and call-log rows for row-level
+    # security (SPEC 17.7); never part of the cache key. None asserts the prompt holds no
+    # customer data, and the rows are then shared.
+    customer_id: UUID | None = None
 
 
 class LLMRequest(_Frozen):

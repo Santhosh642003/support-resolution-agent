@@ -83,3 +83,15 @@ A running log of real defects found during development, each with the test or ch
 - **Tests:** `tests/unit/test_commitment_check.py` (the three sentences above verbatim, other named phrasings, factual sentences not flagged, the closing line per outcome never matching the check itself), and in `tests/db/test_order_status_workflow.py` a promise that is otherwise correct fails closed end to end, and a verified reply ends with exactly one deterministic line.
 - **Known limits (stated, not hidden):** the check catches a named class of phrasing and cannot catch paraphrase. `test_a_paraphrase_is_not_caught_and_that_is_the_stated_limit` records a promise-like sentence that passes. The residual rate is measured in M3 under the citation-support rubric as its own category, "unbacked commitment", counted separately from citation errors. After the fix, four live conversations produced no commitment phrasing (n=4; evidence the prompt works, not a rate).
 - **Class of bug:** a verifier that checks what it was written to check and nothing else; a model allowed to state facts about the system's own future behaviour.
+
+## F-010: a security control silently disabled a correctness control (RLS vs. the drift views)
+
+- **Found:** M2 task 0 (row-level security, SPEC 17), while building it; entered in this log on the PM's review of that task.
+- **Symptom:** after `FORCE ROW LEVEL SECURITY` was set, the refund drift views reported no drift to a superuser.
+- **Tests:** `tests/db/test_refund_lines.py::test_without_security_invoker_row_level_security_hides_drift_from_the_check` reproduces it (the option removed inside a rolled-back transaction: real drift, empty result) and `::test_every_view_in_the_schema_is_security_invoker` fails for any future view without the option.
+- **Cause:** a view runs with its OWNER's privileges by default. The owner (`support_owner`) is subject to FORCE RLS, and with no customer bound it sees no rows, so the view evaluated over an empty table set no matter who queried it. The invariant check kept running and kept answering "no drift".
+- **Fix:** both views are `security_invoker` (migration 0012), so they evaluate as the caller: the superuser audit sees every row, the app role sees only its customer.
+- **Why it matters:** an invariant checker that cannot see violations is worse than none, because it reports success. Nothing errored, nothing was logged, and every existing test passed; only a test that created a violation and asked the view for it could notice.
+- **Rule going forward:** every view over a protected table is `security_invoker`, and a correctness check is itself tested by feeding it a violation (the drift tests do). Adding RLS to a table changes what every view, function and report that reads it can see; list them when you add the policy.
+- **Class of bug:** one control silently defeating another; a checker that fails open.
+
