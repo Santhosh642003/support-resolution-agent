@@ -103,6 +103,33 @@ class _Seeder:
         self.unchanged += 1
         return False
 
+    def shipping_line(self, order: OrderDef) -> None:
+        """The order's shipping line (migration 0014). Its natural key is the order (at most one per
+        order), not a derived id, because migration 0014 backfills one with a generated id for rows
+        that existed before it; the line is matched on the order and compared on its amounts."""
+        oid, cid = ids.order_id(order.key), ids.customer_id(order.customer)
+        res = self.conn.execute(
+            text(
+                "INSERT INTO order_items (order_id, customer_id, line_type, qty, unit_price_cents,"
+                " paid_cents) VALUES (:o, :c, 'shipping', 1, :s, :s)"
+                " ON CONFLICT (order_id) WHERE line_type = 'shipping' DO NOTHING"
+            ),
+            {"o": oid, "c": cid, "s": order.shipping_cents},
+        )
+        if res.rowcount == 1:
+            self.inserted["order_items"] += 1
+            return
+        stored = self.conn.execute(
+            text(
+                "SELECT unit_price_cents, paid_cents FROM order_items"
+                " WHERE order_id = :o AND line_type = 'shipping'"
+            ),
+            {"o": oid},
+        ).one()
+        if (stored.unit_price_cents, stored.paid_cents) != (order.shipping_cents,) * 2:
+            raise SeedChangedError(f"shipping line of {order.key} differs from the definition")
+        self.unchanged += 1
+
     def shipment(self, order: OrderDef) -> None:
         ship = order.shipment
         if ship is None:
@@ -245,8 +272,13 @@ def seed_all(conn: Connection) -> SeedReport:
                     "paid_cents": item.paid_cents,
                     "final_sale": item.final_sale,
                     "digital_accessed_at": item.digital_accessed_at,
+                    "line_type": "item",
+                    "items_total": item.items_total,
+                    "items_shipped": item.items_shipped,
                 },
             )
+        if o.shipping_cents > 0:
+            s.shipping_line(o)
         if o.shipment is not None:
             s.shipment(o)
 

@@ -47,7 +47,7 @@ def seeded(conn: Connection) -> Connection:
 def test_first_run_inserts_everything_and_second_run_changes_nothing(conn: Connection) -> None:
     first = seed_all(conn)
     n_events = sum(len(o.shipment.events) for o in ORDERS if o.shipment)
-    n_items = sum(len(o.items) for o in ORDERS)
+    n_items = sum(len(o.items) + (1 if o.shipping_cents else 0) for o in ORDERS)  # + shipping lines
     n_ships = sum(1 for o in ORDERS if o.shipment)
     assert first.inserted == {
         "customers": len(CUSTOMERS),
@@ -117,7 +117,7 @@ def test_required_cases_in_the_database_have_the_properties_they_claim(
     # 4: a final_sale line beside a refundable one
     r = q(
         "SELECT count(*) FILTER (WHERE final_sale) AS fs, count(*) FILTER (WHERE NOT final_sale)"
-        " AS ok FROM order_items WHERE order_id = :i",
+        " AS ok FROM order_items WHERE order_id = :i AND line_type = 'item'",
         i=ids.order_id("final_sale_item_in_order"),
     )
     assert (r.fs, r.ok) == (1, 1)

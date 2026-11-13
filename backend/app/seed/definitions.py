@@ -54,6 +54,9 @@ class ItemDef:
     paid_cents: int  # actually paid for the line, after discount allocation
     final_sale: bool = False
     digital_accessed_at: datetime | None = None
+    # Subscription box lines only (refund v1 clause 4): items in the box and items shipped so far.
+    items_total: int | None = None
+    items_shipped: int | None = None
 
 
 @dataclass(frozen=True)
@@ -496,6 +499,32 @@ ORDERS: tuple[OrderDef, ...] = (
         list_total_cents=5000,
         items=(ItemDef("SIM-GIFTCARD-50", 1, 5000, 5000),),
     ),
+    # Supplementary. v2 (2026-03-26). A subscription box of 3 items of which 1 has shipped (this is
+    # the first drop; delivered 04-04, day 11 of 45). Refund v1 clause 4, carried into v2 by v2
+    # clause 6, refunds the unshipped share, rounded UP in the customer's favour: 5000 * 2 / 3 =
+    # 3333.33 -> 3334 (rounding down would give 3333). The 500 shipping line is NOT refundable: the
+    # shipment arrived. This is the one seeded case that makes the proration rule fire end to end.
+    OrderDef(
+        key="partially_shipped_subscription_box",
+        order_number="SIM-3003",
+        customer="carol",
+        placed_at=at(2026, 3, 26),
+        status="delivered",
+        list_total_cents=5000,
+        shipping_cents=500,
+        items=(ItemDef("SIM-BOX-DELUXE", 1, 5000, 5000, items_total=3, items_shipped=1),),
+        shipment=ShipmentDef(
+            "SIM-TRK-3003",
+            "delivered",
+            at(2026, 3, 31),
+            at(2026, 4, 9),
+            at(2026, 4, 4),
+            (
+                EventDef(at(2026, 3, 31), "PICKED_UP", "SIMULATED carrier pickup"),
+                EventDef(at(2026, 4, 4), "DELIVERED", "SIMULATED delivery"),
+            ),
+        ),
+    ),
     # First-charge orders for each subscription.
     _charge_order("SIM-S-0001", _SUB["annual_v1_inside_proration_window"], "SIM-PLAN-ANNUAL"),
     _charge_order("SIM-S-0002", _SUB["monthly_v2_inside_cooling_off"], "SIM-PLAN-MONTHLY"),
@@ -564,6 +593,12 @@ CASES: tuple[SeedCase, ...] = (
     SeedCase("replacement_in_transit", "order", None, "the replacement for case 5"),
     SeedCase(
         "gift_card_purchase", "order", None, "a gift card purchase: gift card policy in scope"
+    ),
+    SeedCase(
+        "partially_shipped_subscription_box",
+        "order",
+        None,
+        "subscription box, 1 of 3 items shipped: proration rounds up, 3334 of 5000",
     ),
     SeedCase("in_transit_on_schedule", "order", None, "order-status lookup, on schedule"),
     SeedCase(

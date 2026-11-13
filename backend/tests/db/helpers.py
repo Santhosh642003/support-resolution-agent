@@ -64,7 +64,7 @@ def make_order(
     items: list[int] | None = None,
 ) -> UUID:
     """Create an order. By default it has ONE item paid for list_total - discount; pass
-    `items=[...]` (paid amounts) for several. Shipping is not part of any item."""
+    `items=[...]` (paid amounts) for several. Shipping, if any, is its own line."""
     order_id = one_uuid(
         conn,
         "INSERT INTO orders (order_number, customer_id, placed_at, list_total_cents,"
@@ -80,12 +80,23 @@ def make_order(
     )
     for paid in items if items is not None else [list_total - discount]:
         make_item(conn, customer_id, order_id, paid)
+    if shipping > 0:  # shipping is an order line (migration 0014); the header must match it
+        conn.execute(
+            text(
+                "INSERT INTO order_items (order_id, customer_id, line_type, qty, unit_price_cents,"
+                " paid_cents) VALUES (:o, :c, 'shipping', 1, :s, :s)"
+            ),
+            {"o": order_id, "c": customer_id, "s": shipping},
+        )
     return order_id
 
 
 def item_ids(conn: Connection, order_id: UUID) -> list[UUID]:
     rows = conn.execute(
-        text("SELECT id FROM order_items WHERE order_id = :o ORDER BY paid_cents DESC, id"),
+        text(
+            "SELECT id FROM order_items WHERE order_id = :o AND line_type = 'item'"
+            " ORDER BY paid_cents DESC, id"
+        ),
         {"o": order_id},
     )
     return [r.id for r in rows]
