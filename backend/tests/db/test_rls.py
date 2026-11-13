@@ -576,7 +576,7 @@ def test_a_cached_response_is_tagged_with_its_customer_and_shared_only_when_unta
     live.complete(_req(ALEX, text_))  # written inside alex's transaction
     live.complete(_req(None, "no customer data in this prompt (cache rls probe a2)"))
     with world.superuser.connect() as c:
-        tags = dict(
+        tags: dict[str, UUID | None] = dict(
             c.execute(
                 text(
                     "SELECT response->>'text', customer_id FROM llm_cache WHERE provider = 'scripted'"
