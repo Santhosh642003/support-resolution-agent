@@ -16,7 +16,7 @@ They never share a variable, and a test fails if they are ever driven by the sam
 
 Evaluation order (first match ends it):
   1  version selected by purchase date           none in effect -> needs_human
-  2  subscription charge / canceled order        routed away / denied
+  2  subscription charge / canceled / paid nothing  routed away / denied (a free replacement)
   3  window anchor: delivered, lost, exception   undelivered restricted categories -> needs_human
   3b replacement already sent (lost/exception)   a replacement not itself lost -> denied
   4  window                                      outside -> denied
@@ -474,6 +474,11 @@ def _evaluate(order: RefundOrder, today: date) -> RefundDecision:
     if order.status == "canceled":
         return _result(RefundOutcome.DENIED, [R.NOTHING_REFUNDABLE], clauses, facts, v, zero)
 
+    if (
+        order.paid_cents == 0
+    ):  # a free replacement, say: no money was taken, so none can be returned
+        return _result(RefundOutcome.DENIED, [R.NOTHING_WAS_PAID], clauses, facts, v, zero)
+
     ship = order.shipment
     delivered_on = None if ship is None else ship.delivered_on
     if ship is not None and (
@@ -586,7 +591,9 @@ def _evaluate(order: RefundOrder, today: date) -> RefundDecision:
         if item.line_type == "shipping":
             if entire_shipment_lost:  # the delivery fee for a delivery that never happened
                 amount = remaining
-                line_reasons.append(R.SHIPPING_CHARGE_REFUNDED)
+                line_reasons.append(
+                    R.ALREADY_REFUNDED if remaining == 0 else R.SHIPPING_CHARGE_REFUNDED
+                )
             else:  # other items arrived: never refunded on a partial or item-level refund
                 amount = 0
                 fired_shipping = item.paid_cents > 0
@@ -629,7 +636,7 @@ def _evaluate(order: RefundOrder, today: date) -> RefundDecision:
     if fired_digital:
         clauses.add(_refund_key(terms, terms.digital), True)
     shipping_refunded = entire_shipment_lost and any(
-        i.line_type == "shipping" and i.paid_cents > 0 for i in order.items
+        i.line_type == "shipping" and i.paid_cents > i.refunded_cents for i in order.items
     )
     if fired_shipping or shipping_refunded:  # the clause that decided what became of the fee
         clauses.add(_refund_key(terms, terms.lost), True, terms.lost_via[:1])

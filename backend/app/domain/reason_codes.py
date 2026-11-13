@@ -37,6 +37,7 @@ class ReasonCode(StrEnum):
     PRORATED_BY_ITEMS_SHIPPED = "PRORATED_BY_ITEMS_SHIPPED"
     ALREADY_REFUNDED = "ALREADY_REFUNDED"
     NOTHING_REFUNDABLE = "NOTHING_REFUNDABLE"
+    NOTHING_WAS_PAID = "NOTHING_WAS_PAID"  # e.g. a free replacement: there is no money to return
     ABOVE_AUTO_APPROVE_CEILING = "ABOVE_AUTO_APPROVE_CEILING"
     # The two paid-amount mechanisms are deliberately separate codes (SPEC 16.2): the first is a
     # POLICY statement (refund v2 clause 4), the second is the SYSTEM invariant covering v1.

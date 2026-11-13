@@ -347,3 +347,38 @@ def test_a_v1_lost_shipment_cites_its_own_clause_2_with_no_incorporation() -> No
     assert d.policy_version == 1 and R.RULE_CARRIED_FORWARD_FROM_V1 not in d.reason_codes
     assert "refund-v1-clause-2" in d.decisive_clause_keys
     assert all(c.incorporating == () for c in d.applied)
+
+
+# --- an order that was paid nothing (found by the database integration tests, SPEC 18.7) -----------
+
+
+@pytest.mark.parametrize("key", ["replacement_in_transit", "replacement_also_lost"])
+def test_a_free_replacement_has_nothing_to_refund_and_says_so_without_citing_a_clause(
+    key: str,
+) -> None:
+    """Before: SIM-3005 (lost, paid 0) was denied NOTHING_REFUNDABLE with NO decisive clause and a
+    list of reasons about a lost-shipment refund it could never pay. Now the reason is the true one."""
+    d = decide_refund(from_seed(key), TODAY)
+    assert d.outcome is DENIED and d.reason_codes == (R.NOTHING_WAS_PAID,)
+    assert d.aggregate_cents == 0 and d.applied == () and d.handoff is None
+
+
+def test_a_shipping_line_already_refunded_says_already_refunded_not_shipping_refunded() -> None:
+    """Found by the database integration test: a fully refunded shipping line still reported
+    SHIPPING_CHARGE_REFUNDED, a reason about money the decision no longer moves."""
+    o = lost_order(shipping=500)
+    done = RefundOrder(
+        **{
+            **o.__dict__,
+            "items": (
+                RefundItem("a", "A", "general", 4800, 4800),
+                RefundItem("b", "B", "general", 2200, 2200),
+                RefundItem("s", "SHIPPING", "shipping", 500, 500, line_type="shipping"),
+            ),
+            "refunded_total_cents": 7500,
+        }
+    )
+    d = decide_refund(done, TODAY)
+    assert d.outcome is DENIED and lines(d) == [0, 0, 0]
+    assert d.lines[2].reason_codes == (R.ALREADY_REFUNDED,)
+    assert R.SHIPPING_CHARGE_REFUNDED not in d.reason_codes

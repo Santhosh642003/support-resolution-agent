@@ -525,6 +525,58 @@ ORDERS: tuple[OrderDef, ...] = (
             ),
         ),
     ),
+    # Supplementary. The chain "lost, replaced, replacement lost, refund available" (shipping v1
+    # clause 4), end to end. v2 (2026-03-02). Shipped 03-03, no scan after 03-05: presumed lost
+    # 2026-03-17 (10 business days), day 29 of the 45-day window. The replacement SIM-3005 (below)
+    # shipped 03-23 and is itself presumed lost on 2026-04-06, so as of SIMULATED_TODAY it is no
+    # longer the remedy and the original is refundable: 3000 for the box plus the 500 shipping line.
+    OrderDef(
+        key="lost_shipment_replacement_also_lost",
+        order_number="SIM-3004",
+        customer="carol",
+        placed_at=at(2026, 3, 2),
+        status="shipped",
+        list_total_cents=3000,
+        shipping_cents=500,
+        items=(ItemDef("SIM-BOX-CLASSIC", 1, 3000, 3000),),
+        shipment=ShipmentDef(
+            "SIM-TRK-3004",
+            "in_transit",
+            at(2026, 3, 3),
+            at(2026, 3, 12),
+            None,
+            (
+                EventDef(at(2026, 3, 2), "LABEL_CREATED", "SIMULATED label created"),
+                EventDef(at(2026, 3, 3), "PICKED_UP", "SIMULATED carrier pickup"),
+                EventDef(at(2026, 3, 5), "ARRIVED_HUB", "SIMULATED hub scan; no later scans"),
+            ),
+        ),
+    ),
+    # The replacement for SIM-3004, at no charge (paid 0), with its OWN window: shipped 03-23,
+    # presumed lost 2026-04-06, so it is lost as of SIMULATED_TODAY (04-15).
+    OrderDef(
+        key="replacement_also_lost",
+        order_number="SIM-3005",
+        customer="carol",
+        placed_at=at(2026, 3, 20),
+        status="shipped",
+        list_total_cents=3000,
+        discount_cents=3000,
+        replacement_for="lost_shipment_replacement_also_lost",
+        items=(ItemDef("SIM-BOX-CLASSIC", 1, 3000, 0),),
+        shipment=ShipmentDef(
+            "SIM-TRK-3005",
+            "in_transit",
+            at(2026, 3, 23),
+            at(2026, 4, 1),
+            None,
+            (
+                EventDef(at(2026, 3, 20), "LABEL_CREATED", "SIMULATED replacement label created"),
+                EventDef(at(2026, 3, 23), "PICKED_UP", "SIMULATED carrier pickup"),
+                EventDef(at(2026, 3, 25), "ARRIVED_HUB", "SIMULATED hub scan; no later scans"),
+            ),
+        ),
+    ),
     # First-charge orders for each subscription.
     _charge_order("SIM-S-0001", _SUB["annual_v1_inside_proration_window"], "SIM-PLAN-ANNUAL"),
     _charge_order("SIM-S-0002", _SUB["monthly_v2_inside_cooling_off"], "SIM-PLAN-MONTHLY"),
@@ -600,6 +652,13 @@ CASES: tuple[SeedCase, ...] = (
         None,
         "subscription box, 1 of 3 items shipped: proration rounds up, 3334 of 5000",
     ),
+    SeedCase(
+        "lost_shipment_replacement_also_lost",
+        "order",
+        None,
+        "lost, replaced, and the replacement is lost too: the original is refundable",
+    ),
+    SeedCase("replacement_also_lost", "order", None, "the replacement for SIM-3004, itself lost"),
     SeedCase("in_transit_on_schedule", "order", None, "order-status lookup, on schedule"),
     SeedCase(
         "v2_delivery_exception_before_presumed_lost",

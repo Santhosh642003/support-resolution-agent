@@ -215,7 +215,7 @@ def test_the_same_exception_under_v1_does_not_shorten_the_wait() -> None:
     assert d.decisive_clause_keys == ("shipping-v1-clause-2", "refund-v1-clause-2")
 
 
-@pytest.mark.parametrize("key", ["replacement_in_transit", "in_transit_on_schedule"])
+@pytest.mark.parametrize("key", ["in_transit_on_schedule"])
 def test_supplementary_in_transit_shipments_are_not_yet_refundable(key: str) -> None:
     d = decide_refund(from_seed(key), TODAY)
     assert d.outcome is DENIED and d.aggregate_cents == 0
