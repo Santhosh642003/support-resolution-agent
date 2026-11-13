@@ -27,9 +27,9 @@ def _clause(policy_type: str, version: int, number: int) -> str:
 def test_expected_documents_and_clause_counts() -> None:
     counts = {k: len(d.clauses) for k, d in DOCS.items()}
     assert counts == {
-        ("shipping", 1): 3,
+        ("shipping", 1): 4,  # clause 4 added 2026-11-12 (SPEC 18.6)
         ("refund", 1): 6,
-        ("refund", 2): 5,
+        ("refund", 2): 6,  # residual clause 6 added 2026-11-12
         ("cancellation", 1): 3,
         ("cancellation", 2): 2,
     }
@@ -38,7 +38,7 @@ def test_expected_documents_and_clause_counts() -> None:
 def test_chunk_keys_are_human_meaningful_and_stable() -> None:
     assert DOCS[("refund", 2)].chunk_key(3) == "refund-v2-clause-3"
     keys = [d.chunk_key(c.number) for d in DOCS.values() for c in d.clauses]
-    assert len(keys) == len(set(keys)) == 19
+    assert len(keys) == len(set(keys)) == 21
     assert "shipping-v1-clause-2" in keys and "cancellation-v2-clause-2" in keys
 
 

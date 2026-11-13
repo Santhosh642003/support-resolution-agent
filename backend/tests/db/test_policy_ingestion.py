@@ -63,7 +63,9 @@ def test_reingestion_twice_leaves_chunk_count_and_identifiers_unchanged(
     total = sum(len(d.clauses) for d in docs)
     assert first.documents_inserted == len(docs) and first.chunks_inserted == total
     snap1 = _snapshot(conn)
-    assert _original_count([k for k, _, _ in snap1]) == 19  # the original corpus, unchanged
+    assert (
+        _original_count([k for k, _, _ in snap1]) == 21
+    )  # the original three policies: 19 clauses + 2 added 2026-11-12 (SPEC 18.6)
     ids1 = {
         r.chunk_key: r.id for r in conn.execute(text("SELECT id, chunk_key FROM policy_chunks"))
     }
@@ -160,7 +162,7 @@ def test_purchase_after_cutover_returns_v2_never_v1(ingested: Connection) -> Non
     for d in (_pd(2026, 3, 2), _pd(2026, 11, 10), _pd(2030, 1, 1)):
         clauses = clauses_in_effect(ingested, "refund", d)
         assert _versions(clauses) == {2}, d
-        assert len(clauses) == 5
+        assert len(clauses) == 6  # clause 6, the residual clause, added 2026-11-12
         found = search_clauses_fts(ingested, "refund window days", d, ("refund",))
         assert found and _versions(found) == {2}, d
 

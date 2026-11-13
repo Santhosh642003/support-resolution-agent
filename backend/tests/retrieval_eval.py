@@ -42,6 +42,10 @@ from tests.fixtures.retrieval_cases import CASES
 from tests.fixtures.retrieval_heldout import HELDOUT_QUERIES
 
 RESULTS = Path(__file__).resolve().parents[2] / "docs" / "retrieval" / "recall.json"
+# The recorded measurements (this module and retrieval_eval2) were taken on the corpus as it
+# stood before the 2026-11-12 policy amendments (SPEC 18.6); the reproduction tests read this
+# frozen copy so the history stays reproducible. See its README.
+FROZEN_POLICIES = Path(__file__).resolve().parent / "fixtures" / "policies_as_measured"
 KS = tuple(range(3, 11))
 CANDIDATES = 20
 ALL_TYPES = (

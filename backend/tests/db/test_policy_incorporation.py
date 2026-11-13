@@ -31,6 +31,9 @@ WIDE = HybridConfig(k=30, candidates_per_leg=60, rrf_k=60, weight_fts=1.0, weigh
 LINKS = {
     ("refund-v2-clause-5", "refund-v1-clause-5"),
     ("refund-v2-clause-5", "refund-v1-clause-6"),
+    # the residual clause (SPEC 18.6): v2 clause 6 carries v1 clauses 2 and 4 forward
+    ("refund-v2-clause-6", "refund-v1-clause-2"),
+    ("refund-v2-clause-6", "refund-v1-clause-4"),
     ("cancellation-v2-clause-1", "cancellation-v1-clause-1"),
     ("cancellation-v2-clause-1", "cancellation-v1-clause-2"),
     ("cancellation-v2-clause-1", "cancellation-v1-clause-3"),
@@ -63,12 +66,12 @@ def test_links_are_ingested_idempotently_and_never_touch_chunk_identity(
 ) -> None:
     docs = load_policies()
     first = ingest_policies(conn, embedder, docs)
-    assert first.links_inserted == 5 and _links(conn) == LINKS
+    assert first.links_inserted == 7 and _links(conn) == LINKS
     ids_before = {
         r.chunk_key: r.id for r in conn.execute(text("SELECT id, chunk_key FROM policy_chunks"))
     }
     again = ingest_policies(conn, embedder, docs)
-    assert (again.links_inserted, again.links_unchanged, again.chunks_inserted) == (0, 5, 0)
+    assert (again.links_inserted, again.links_unchanged, again.chunks_inserted) == (0, 7, 0)
     ids_after = {
         r.chunk_key: r.id for r in conn.execute(text("SELECT id, chunk_key FROM policy_chunks"))
     }
@@ -84,7 +87,7 @@ def test_a_link_declared_on_an_already_ingested_document_is_added_without_a_hash
     ingest_policies(conn, embedder, stripped)
     assert _links(conn) == set()
     report = ingest_policies(conn, embedder, docs)  # same content hash: only the links are new
-    assert report.documents_inserted == 0 and report.links_inserted == 5
+    assert report.documents_inserted == 0 and report.links_inserted == 7
     assert _links(conn) == LINKS
 
 
@@ -200,12 +203,15 @@ def test_retrieving_v2_clause_5_brings_v1_clause_5_with_it_flagged_and_with_prov
     direct = {r.clause.chunk_key: r for r in res.clauses}
     assert "refund-v2-clause-5" in direct
     assert not any(r.is_incorporated for r in res.clauses)  # direct means in effect
-    assert {r.clause.chunk_key for r in res.incorporated} == {
-        "refund-v1-clause-5",
-        "refund-v1-clause-6",
-    }
+    # what clause 5 brings in (clause 6, the residual clause, may be retrieved too and bring its own)
+    via_5 = [
+        r
+        for r in res.incorporated
+        if r.incorporated_by is not None and r.incorporated_by.chunk_key == "refund-v2-clause-5"
+    ]
+    assert {r.clause.chunk_key for r in via_5} == {"refund-v1-clause-5", "refund-v1-clause-6"}
     assert all(
-        r.incorporated_by is not None and r.incorporated_by.chunk_key == "refund-v2-clause-5"
+        r.incorporated_by is not None and r.incorporated_by.chunk_key in direct
         for r in res.incorporated
     )
     # the text the explainer needs is actually there
@@ -215,7 +221,7 @@ def test_retrieving_v2_clause_5_brings_v1_clause_5_with_it_flagged_and_with_prov
     assert direct["refund-v2-clause-5"].citation == (
         "Refund Policy v2, clause 5, incorporating v1 clause 5, v1 clause 6"
     )
-    cites = {r.clause.chunk_key: r.citation for r in res.incorporated}
+    cites = {r.clause.chunk_key: r.citation for r in via_5}
     assert cites["refund-v1-clause-5"] == (
         "Refund Policy v1, clause 5, as incorporated by Refund Policy v2, clause 5"
     )

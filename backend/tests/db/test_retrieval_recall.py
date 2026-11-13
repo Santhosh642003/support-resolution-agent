@@ -15,7 +15,7 @@ from app.retrieval.ingest import ingest_policies
 from app.retrieval.policy_loader import load_policies
 from tests.fixtures.retrieval_cases import CASES
 from tests.fixtures.retrieval_heldout import HELDOUT_QUERIES
-from tests.retrieval_eval import RESULTS, all_queries, measure
+from tests.retrieval_eval import FROZEN_POLICIES, RESULTS, all_queries, measure
 
 
 @pytest.fixture(scope="module")
@@ -26,7 +26,7 @@ def embedder() -> OnnxBgeEmbedder:
 def test_the_recorded_recall_numbers_reproduce_exactly(
     conn: Connection, embedder: OnnxBgeEmbedder
 ) -> None:
-    ingest_policies(conn, embedder, load_policies())
+    ingest_policies(conn, embedder, load_policies(FROZEN_POLICIES))
     default_k = 7  # the k in force when the round-1 numbers were recorded; not today's default
     fresh = measure(conn, embedder, default_k)
     recorded = json.loads(RESULTS.read_text(encoding="utf-8"))

@@ -13,6 +13,7 @@ from app.retrieval.embedder import OnnxBgeEmbedder
 from app.retrieval.ingest import ingest_policies
 from app.retrieval.policy_loader import load_policies
 from app.seed.loader import seed_all
+from tests.retrieval_eval import FROZEN_POLICIES
 from tests.retrieval_eval2 import RESULTS, measure
 
 
@@ -29,7 +30,7 @@ def test_the_recorded_round_2_numbers_reproduce_exactly(
     conn: Connection, embedder: OnnxBgeEmbedder
 ) -> None:
     seed_all(conn)
-    ingest_policies(conn, embedder, load_policies())
+    ingest_policies(conn, embedder, load_policies(FROZEN_POLICIES))
     fresh = measure(conn, embedder)
     rec = recorded()
     fresh.pop("protocol", None)

@@ -27,6 +27,7 @@ from app.retrieval.ingest import ingest_policies
 from app.retrieval.policy_loader import load_policies
 from app.seed.definitions import ORDERS, SUBSCRIPTIONS
 from tests.fixtures.retrieval_cases import CASES
+from tests.retrieval_eval import FROZEN_POLICIES
 
 CFG = HybridConfig.from_settings(Settings(_env_file=None))  # type: ignore[call-arg]
 ORDER_DATE = {o.key: o.placed_at.date() for o in ORDERS}
@@ -45,6 +46,14 @@ def embedder() -> OnnxBgeEmbedder:
 @pytest.fixture
 def corpus(conn: Connection, embedder: OnnxBgeEmbedder) -> Connection:
     ingest_policies(conn, embedder, load_policies())
+    return conn
+
+
+@pytest.fixture
+def frozen_corpus(conn: Connection, embedder: OnnxBgeEmbedder) -> Connection:
+    """The corpus as it stood when the dev set was measured (85 clauses, before the 2026-11-12
+    amendments, SPEC 18.6). The recorded dev-set numbers are history, so they read this copy."""
+    ingest_policies(conn, embedder, load_policies(FROZEN_POLICIES))
     return conn
 
 
@@ -88,7 +97,7 @@ def test_vector_leg_alone_cannot_return_the_other_version_even_when_asked_for_ev
     """A query embedded from v1 text is nearest to v1 chunks; on a v2 date they must not appear."""
     qvec = embedder.embed([V1_WORDING])[0]
     got = vector_leg(corpus, qvec, pd(date(2026, 4, 1)), ("refund",), 50)
-    assert {c.version for c in got} == {2} and len(got) == 5  # all of v2's clauses, none of v1's
+    assert {c.version for c in got} == {2} and len(got) == 6  # all of v2's clauses, none of v1's
     got = fts_leg(corpus, V1_WORDING, pd(date(2026, 4, 1)), ("refund",), 50)
     assert {c.version for c in got} <= {2}
 
@@ -207,11 +216,13 @@ DEV_SET_K = 7  # the k of the original dev-set measurement (SPEC 7.1); the defau
 
 
 def test_for_each_seeded_case_the_clauses_a_correct_decision_needs_are_in_the_top_k(
-    corpus: Connection, embedder: OnnxBgeEmbedder
+    frozen_corpus: Connection, embedder: OnnxBgeEmbedder
 ) -> None:
-    """The original 16-query dev set on the original 19-clause corpus. At the k it was measured at
-    (7) every needed clause is retrieved; at today's default k (6) exactly one query falls short,
-    which is what the recorded curve says (15 of 16)."""
+    """The original 16-query dev set on the frozen_corpus it was measured on (frozen copy). At the k it was
+    measured at (7) every needed clause is retrieved; at today's default k (6) exactly one query
+    falls short, which is what the recorded curve says (15 of 16). What the 2026-11-12 amendments
+    did to this measurement is pinned separately, on the current frozen_corpus, in
+    test_the_2026_11_12_amendments_cost_the_dev_set_one_needed_clause_at_k7."""
     dev_cfg = dataclasses.replace(CFG, k=DEV_SET_K)
     missing: list[str] = []
     short_at_default = 0
@@ -220,12 +231,14 @@ def test_for_each_seeded_case_the_clauses_a_correct_decision_needs_are_in_the_to
         for q in case.queries:
             d = _purchase_date(case.case_key)
             got = {
-                r.clause.chunk_key for r in retrieve(corpus, embedder, q, d, types, dev_cfg).clauses
+                r.clause.chunk_key
+                for r in retrieve(frozen_corpus, embedder, q, d, types, dev_cfg).clauses
             }
             if not case.needed <= got:
                 missing.append(f"{case.case_key}: missing {sorted(case.needed - got)} for {q!r}")
             got6 = {
-                r.clause.chunk_key for r in retrieve(corpus, embedder, q, d, types, CFG).clauses
+                r.clause.chunk_key
+                for r in retrieve(frozen_corpus, embedder, q, d, types, CFG).clauses
             }
             short_at_default += not case.needed <= got6
     assert not missing, "\n".join(missing)
@@ -233,7 +246,7 @@ def test_for_each_seeded_case_the_clauses_a_correct_decision_needs_are_in_the_to
 
 
 def test_recall_curve_is_reproducible_and_beats_random_only_slightly(
-    corpus: Connection, embedder: OnnxBgeEmbedder
+    frozen_corpus: Connection, embedder: OnnxBgeEmbedder
 ) -> None:
     """Records the numbers cited in SPEC 7.1. Full recall = every needed clause is in the top k.
     The random baseline shows how little ranking adds when the in-scope set is only 2-8 clauses."""
@@ -242,9 +255,9 @@ def test_recall_curve_is_reproducible_and_beats_random_only_slightly(
         types = policy_types_for(case.intents, delivery_issue=case.delivery_issue)
         d = _purchase_date(case.case_key)
         for q in case.queries:
-            fts = fts_leg(corpus, q, d, types, 8)
-            vec = vector_leg(corpus, embedder.embed([q])[0], d, types, 8)
-            scope = retrieve(corpus, embedder, q, d, types, CFG).trace.eligible
+            fts = fts_leg(frozen_corpus, q, d, types, 8)
+            vec = vector_leg(frozen_corpus, embedder.embed([q])[0], d, types, 8)
+            scope = retrieve(frozen_corpus, embedder, q, d, types, CFG).trace.eligible
             legs.append((case, fts, vec, scope))
     assert len(legs) == 16
 
@@ -269,6 +282,41 @@ def test_recall_curve_is_reproducible_and_beats_random_only_slightly(
     # where it matters (small k), hybrid is at or above the random baseline at k=1..4, 6, 7
     for k in (1, 2, 3, 4, 6, 7):
         assert measured[k] >= random_expectation(k) - 0.5, k
+
+
+def test_the_2026_11_12_amendments_cost_the_dev_set_one_needed_clause_at_k7(
+    corpus: Connection, embedder: OnnxBgeEmbedder
+) -> None:
+    """On the CURRENT corpus (SPEC 18.6): the amendments added shipping v1 clause 4 and refund v2
+    clause 6 and reworded four more. Before, the dev set retrieved every needed clause at k=7 (16 of
+    16, curve 2/7/9/12/13/15/16/16 for k=1..8); now ONE query loses one (15 of 16): the new
+    replacement clause outranks shipping v1 clause 3 for 'long overdue'. Recorded, not hidden; the
+    needed-clause labels are unchanged (frozen protocol; the evaluation set is regenerated fresh at
+    M3, SPEC 7.3). This is not a retrieval improvement or regression claim about the system."""
+    legs = []
+    for case in CASES:
+        types = policy_types_for(case.intents, delivery_issue=case.delivery_issue)
+        d = _purchase_date(case.case_key)
+        for q in case.queries:
+            fts = fts_leg(corpus, q, d, types, 8)
+            vec = vector_leg(corpus, embedder.embed([q])[0], d, types, 8)
+            legs.append((case, q, fts, vec))
+    curve = {
+        k: sum(
+            case.needed
+            <= {r.clause.chunk_key for r in fuse(f, v, HybridConfig(k, 8, 60, 1.0, 1.0))}
+            for case, _, f, v in legs
+        )
+        for k in range(1, 9)
+    }
+    assert curve == {1: 2, 2: 6, 3: 7, 4: 7, 5: 11, 6: 15, 7: 15, 8: 16}
+    at7 = HybridConfig(DEV_SET_K, 8, 60, 1.0, 1.0)
+    lost = [
+        (case.case_key, sorted(case.needed - {r.clause.chunk_key for r in fuse(f, v, at7)}))
+        for case, _, f, v in legs
+        if not case.needed <= {r.clause.chunk_key for r in fuse(f, v, at7)}
+    ]
+    assert lost == [("lost_shipment_with_replacement_sent", ["shipping-v1-clause-3"])]
 
 
 def test_the_vector_leg_is_exact_so_results_do_not_depend_on_planner_state(

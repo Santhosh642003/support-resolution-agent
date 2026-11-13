@@ -147,6 +147,8 @@ def test_published_documents_declare_the_links_and_keep_their_original_hash() ->
     docs = {(d.policy_type, d.version): d for d in load_policies()}
     assert docs[("refund", 2)].incorporations == (
         Incorporation(5, ("refund-v1-clause-5", "refund-v1-clause-6")),
+        # the residual clause (SPEC 18.6): "except as modified, v1 remains in effect"
+        Incorporation(6, ("refund-v1-clause-2", "refund-v1-clause-4")),
     )
     assert docs[("cancellation", 2)].incorporations == (
         Incorporation(
