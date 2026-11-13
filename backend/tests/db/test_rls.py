@@ -23,6 +23,7 @@ from app.auth.context import CustomerContext
 from app.auth.sessions import SESSION_COOKIE, create_session
 from app.clock import FixedClock
 from app.db.rls import PrivilegedRoleError, assert_unprivileged_role, set_current_customer
+from app.db.rls_guard import EXEMPT
 from app.main import create_app
 from app.providers.guard import FakePromptGuard
 from app.repositories import state as repo
@@ -48,16 +49,9 @@ GOOD = explanation_reply("presumed_lost", [C2], "It shipped on 2026-03-11 and is
 # Tables that are DELIBERATELY not row-level protected, with the reason. A table with a customer_id
 # column that is not protected, or a table that is neither protected nor listed here, fails the
 # catalog test below: protection (or a stated exemption) is required of every future table.
-UNPROTECTED = {
-    "alembic_version": "migration bookkeeping, no customer data",
-    "products": "shared reference data, read-only to the app role",
-    "policy_documents": "shared reference data, read-only to the app role",
-    "policy_chunks": "shared reference data, read-only to the app role",
-    "policy_incorporations": "shared reference data, read-only to the app role",
-    # Columns are (provider text, day date, requests integer): counters, no text of any kind, so it
-    # cannot hold customer data. (llm_cache and llm_calls CAN, and are protected: migration 0013.)
-    "llm_usage_daily": "global provider quota counters; no text column, cannot hold customer data",
-}
+UNPROTECTED = (
+    EXEMPT  # the exemption list lives with the check that enforces it (app/db/rls_guard.py)
+)
 
 # Protected tables whose policy also admits NULL-customer rows (shared). A "returns no rows with no
 # customer set" assertion on these counts only the rows that belong to someone.

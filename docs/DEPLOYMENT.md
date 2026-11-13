@@ -41,6 +41,8 @@ SELECT count(*) FROM orders;                                                -- 0
 SELECT relname FROM pg_class WHERE relrowsecurity AND NOT relforcerowsecurity AND relkind = 'r';  -- no rows
 ```
 
+After every migration run `python -m app.db.rls_guard` (CI does, against a scratch database migrated from empty): it fails with the table's name if any table has row-level security enabled but not forced, a `customer_id` table with none, or a table that is neither protected nor listed as exempt. Migration 0014 lifts FORCE for a backfill and restores it; this is the check that proves it did, and that proves it for every migration after it.
+
 Rules to remember: a **data migration** that must see every customer's rows cannot run as `support_owner` (FORCE row-level security applies to the owner too); run it as the bootstrap superuser. Views over protected tables must be `security_invoker` (the migration sets this for the refund drift views), or they run as the owner and silently return nothing. Passwords come from environment variables or a secrets store; never commit them.
 
 ## arm64
