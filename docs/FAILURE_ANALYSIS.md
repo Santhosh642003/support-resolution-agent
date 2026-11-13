@@ -121,3 +121,12 @@ A running log of real defects found during development, each with the test or ch
 - **Fix:** the historical measurements are left exactly as recorded and their reproduction tests read a frozen copy of the corpus as it was measured (`backend/tests/fixtures/policies_as_measured/`); the effect of the amendments is pinned on the current corpus in `test_the_2026_11_12_amendments_cost_the_dev_set_one_needed_clause_at_k7`. `retrieval_k` was not changed.
 - **Rule going forward:** a recorded measurement is a function of the corpus it was taken on; the reproduction test names that corpus. A policy edit is not free for the evaluation, and the evaluation numbers are not to be cited across it.
 - **Class of bug:** an implicit dependency of a recorded result on mutable input data.
+
+## F-014: a denial with no decisive clause and the wrong reasons, found only by running the engine on seeded data
+
+- **Found:** 2026-11-13, the first run of the database integration tests (SPEC 18.7), on SIM-3005, a free replacement that is itself lost.
+- **Tests:** `backend/tests/unit/test_refund_amendments.py::test_a_free_replacement_has_nothing_to_refund_and_says_so_without_citing_a_clause` and `::test_a_shipping_line_already_refunded_says_already_refunded_not_shipping_refunded`; `backend/tests/db/test_refund_integration.py` (the full Decision for every seeded order).
+- **What happened:** with a paid amount of 0 every line was 0, so the rule "only the exclusions that zeroed a line are decisive" left the Decision with no decisive clause, while its reason codes described a lost-shipment refund and a promotional paid-amount basis that had nothing to do with the outcome. The explanation check "cite every decisive clause" is vacuously true on an empty set, so no later control would have flagged it. A second case in the same area: a shipping line already refunded in full still reported `SHIPPING_CHARGE_REFUNDED`.
+- **Why 59 unit tests and 8 properties missed it:** no hand-built input combined a lost shipment with a paid amount of zero. Only the seed had one, because a free replacement is real data the author had modelled for a different purpose. Unit tests exercise the cases their author imagined; connecting the engine to the data is what finds the ones nobody did.
+- **Fix:** an order paid nothing is denied up front with `NOTHING_WAS_PAID`; a fully refunded shipping line reports `ALREADY_REFUNDED`. Both are tested at the unit level and through the database.
+- **Class of bug:** an unmodelled input combination; a vacuous check on an empty set.
